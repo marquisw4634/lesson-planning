@@ -24,18 +24,16 @@ const isSameDay = (date1, date2) => {
 // Utility function to get all weekdays between two dates
 const getWeekdaysInRange = (startDate, endDate) => {
   const dates = [];
-  let currentDate = new Date(startDate);
-  currentDate.setHours(0, 0, 0, 0); // Normalize to start of day
+  // Ensure startDate and endDate are interpreted as local dates for iteration
+  let current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999); // Normalize to end of day
-
-  while (currentDate <= end) {
-    const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+  while (current <= end) {
+    const dayOfWeek = current.getDay(); // 0 = Sunday, 6 = Saturday
     if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Exclude Sunday (0) and Saturday (6)
-      dates.push(new Date(currentDate));
+      dates.push(new Date(current)); // Push a copy, which is a local Date object
     }
-    currentDate.setDate(currentDate.getDate() + 1);
+    current.setDate(current.getDate() + 1);
   }
   return dates;
 };
@@ -126,7 +124,7 @@ function App() {
   const [showModal, setShowModal] = React.useState(false);
   const [modalType, setModalType] = React.useState(''); // 'addUnit', 'addLesson', 'editLesson', 'confirmDeleteUnit'
   const [lessonToEdit, setLessonToEdit] = React.useState(null);
-  const [lessonDate, setLessonDate] = React.useState(null); // Will store Date object for new lesson modal
+  const [lessonDate, setLessonDate] = React.useState(null); // Will store YYYY-MM-DD string for new lesson modal
   const [unitToDelete, setUnitToDelete] = React.useState(null);
   const [message, setMessage] = React.useState('');
   const [messageType, setMessageType] = React.useState(''); // 'success', 'error'
@@ -214,17 +212,64 @@ function App() {
     showAppMessage('Unit added successfully!', 'success');
   };
 
-  const updateUnitDates = (unitId, startDate, endDate) => {
+  const updateUnitDates = (unitId, newStartDate, newEndDate) => {
     setUnits(prevUnits =>
-      prevUnits.map(unit =>
-        unit.id === unitId
-          ? {
-              ...unit,
-              startDate: startDate ? startDate.toISOString().split('T')[0] : null, // Store as YYYY-MM-DD
-              endDate: endDate ? endDate.toISOString().split('T')[0] : null,     // Store as YYYY-MM-DD
-            }
-          : unit
-      )
+      prevUnits.map(unit => {
+        if (unit.id === unitId) {
+          const oldStartDate = unit.startDate ? new Date(unit.startDate + 'T00:00:00') : null;
+          const oldEndDate = unit.endDate ? new Date(unit.endDate + 'T00:00:00') : null;
+
+          let finalStartDate = newStartDate;
+          let finalEndDate = newEndDate;
+
+          // Find the latest lesson date for this unit
+          const lessonsInUnit = lessons.filter(lesson => lesson.unitId === unitId);
+          let latestLessonDate = null;
+          if (lessonsInUnit.length > 0) {
+            latestLessonDate = new Date(Math.max(...lessonsInUnit.map(lesson => new Date(lesson.date + 'T00:00:00'))));
+          }
+
+          // Adjust end date if it cuts off lessons
+          if (latestLessonDate && finalEndDate && latestLessonDate > finalEndDate) {
+            finalEndDate = latestLessonDate;
+          }
+          // Also ensure end date is not before start date
+          if (finalStartDate && finalEndDate && finalStartDate > finalEndDate) {
+            finalEndDate = finalStartDate;
+          }
+
+
+          // Calculate year difference for shifting lessons
+          let yearDiff = 0;
+          if (oldStartDate && finalStartDate) {
+            yearDiff = finalStartDate.getFullYear() - oldStartDate.getFullYear();
+          }
+
+          // Shift lessons if there's a year difference in the unit start date
+          if (yearDiff !== 0) {
+            setLessons(prevLessons =>
+              prevLessons.map(lesson => {
+                if (lesson.unitId === unitId) {
+                  const lessonDateObj = new Date(lesson.date + 'T00:00:00');
+                  lessonDateObj.setFullYear(lessonDateObj.getFullYear() + yearDiff);
+                  return {
+                    ...lesson,
+                    date: lessonDateObj.toISOString().split('T')[0],
+                  };
+                }
+                return lesson;
+              })
+            );
+          }
+
+          return {
+            ...unit,
+            startDate: finalStartDate ? finalStartDate.toISOString().split('T')[0] : null, // Store as YYYY-MM-DD
+            endDate: finalEndDate ? finalEndDate.toISOString().split('T')[0] : null,     // Store as YYYY-MM-DD
+          };
+        }
+        return unit;
+      })
     );
     showAppMessage('Unit dates updated successfully!', 'success');
   };
@@ -352,7 +397,11 @@ function App() {
 
   const openAddLessonModal = (date) => {
     // Pass the YYYY-MM-DD string of the date to the modal initialData
-    setLessonDate(date.toISOString().split('T')[0]);
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    setLessonDate(`${year}-${month}-${day}`);
     setLessonToEdit(null);
     setModalType('addLesson');
     setShowModal(true);
@@ -561,7 +610,7 @@ const Header = ({ units, selectedUnit, setSelectedUnit, setCurrentView, setCurre
             onChange={(e) => { setCurrentTheme(e.target.value); setShowMenu(false); }}
             className={`w-full p-2 rounded ${currentThemeClasses.inputBorder} ${currentThemeClasses.secondaryBg} ${currentThemeClasses.textColor}`}
           >
-            {Object.keys(themes).map(themeName => (
+            {Object.keys(themes).filter(themeName => themeName !== 'liquidGlass').map(themeName => ( // Filter out liquidGlass
               <option key={themeName} value={themeName}>{themeName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</option>
             ))}
           </select>
