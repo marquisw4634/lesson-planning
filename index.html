@@ -20,14 +20,1116 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        /* Basic styles for draggable elements feedback */
+        .dragging {
+            opacity: 0.5;
+            border: 2px dashed #6366f1; /* Tailwind indigo-500 */
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <!-- React and ReactDOM CDNs -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Your compiled React app -->
-    <script src="script.js"></script>
+    <div id="app-root" class="min-h-screen font-inter flex flex-col"></div>
+
+    <script>
+        // --- Global State Variables ---
+        let units = [];
+        let lessons = [];
+        let selectedUnit = null;
+        let currentView = 'listView'; // listView, weeklyView, monthlyView
+        let currentTheme = 'default';
+        let localUserId = ''; // For local storage, a persistent 'user ID'
+
+        // --- Utility Functions ---
+
+        // Function to format dates
+        const formatDate = (date) => {
+            return new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        };
+
+        // Function for robust date comparison (year, month, day)
+        const isSameDay = (date1, date2) => {
+            if (!date1 || !date2) return false;
+            const d1String = (date1 instanceof Date) ? date1.toISOString().split('T')[0] : date1;
+            const d2String = (date2 instanceof Date) ? date2.toISOString().split('T')[0] : date2;
+            return d1String === d2String;
+        };
+
+        // Function to get all weekdays between two dates
+        const getWeekdaysInRange = (startDate, endDate) => {
+            const dates = [];
+            let current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+            while (current <= end) {
+                const dayOfWeek = current.getDay(); // 0 = Sunday, 6 = Saturday
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Exclude Sunday (0) and Saturday (6)
+                    dates.push(new Date(current));
+                }
+                current.setDate(current.getDate() + 1);
+            }
+            return dates;
+        };
+
+        // --- Theme Definitions ---
+        const themes = {
+            default: {
+                primaryBg: 'bg-blue-50',
+                secondaryBg: 'bg-white',
+                textColor: 'text-gray-800',
+                accentColor: 'bg-blue-600 text-white',
+                borderColor: 'border-blue-200',
+                hoverBg: 'hover:bg-blue-100',
+                buttonBg: 'bg-blue-500 hover:bg-blue-600 text-white',
+                inputBorder: 'border-gray-300 focus:border-blue-500',
+                gradedBg: 'bg-red-100',
+                gradedBorder: 'border-red-400',
+            },
+            modern: {
+                primaryBg: 'bg-gray-100',
+                secondaryBg: 'bg-white',
+                textColor: 'text-gray-900',
+                accentColor: 'bg-purple-600 text-white',
+                borderColor: 'border-gray-300',
+                hoverBg: 'hover:bg-gray-200',
+                buttonBg: 'bg-purple-500 hover:bg-purple-600 text-white',
+                inputBorder: 'border-gray-400 focus:border-purple-500',
+                gradedBg: 'bg-pink-100',
+                gradedBorder: 'border-pink-400',
+            },
+            monochrome: {
+                primaryBg: 'bg-gray-50',
+                secondaryBg: 'bg-white',
+                textColor: 'text-gray-800',
+                accentColor: 'bg-gray-700 text-white',
+                borderColor: 'border-gray-300',
+                hoverBg: 'hover:bg-gray-100',
+                buttonBg: 'bg-gray-600 hover:bg-gray-700 text-white',
+                inputBorder: 'border-gray-300 focus:border-gray-600',
+                gradedBg: 'bg-red-50',
+                gradedBorder: 'border-red-300',
+            },
+            watercolors: {
+                primaryBg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+                secondaryBg: 'bg-white bg-opacity-80 rounded-lg shadow-md',
+                textColor: 'text-gray-800',
+                accentColor: 'bg-pink-500 text-white',
+                borderColor: 'border-purple-200',
+                hoverBg: 'hover:bg-purple-50',
+                buttonBg: 'bg-pink-400 hover:bg-pink-500 text-white',
+                inputBorder: 'border-purple-300 focus:border-pink-400',
+                gradedBg: 'bg-red-100 bg-opacity-80',
+                gradedBorder: 'border-red-400',
+            },
+            earthy: {
+                primaryBg: 'bg-amber-50',
+                secondaryBg: 'bg-white',
+                textColor: 'text-stone-800',
+                accentColor: 'bg-green-700 text-white',
+                borderColor: 'border-amber-200',
+                hoverBg: 'hover:bg-amber-100',
+                buttonBg: 'bg-green-600 hover:bg-green-700 text-white',
+                inputBorder: 'border-stone-300 focus:border-green-600',
+                gradedBg: 'bg-red-100',
+                gradedBorder: 'border-red-400',
+            },
+            earthToned: {
+                primaryBg: 'bg-yellow-50',
+                secondaryBg: 'bg-white',
+                textColor: 'text-gray-800',
+                accentColor: 'bg-orange-600 text-white',
+                borderColor: 'border-yellow-200',
+                hoverBg: 'hover:bg-yellow-100',
+                buttonBg: 'bg-orange-500 hover:bg-orange-600 text-white',
+                inputBorder: 'border-yellow-300 focus:border-orange-500',
+                gradedBg: 'bg-red-100',
+                gradedBorder: 'border-red-400',
+            },
+        };
+
+        // --- Message Display Function ---
+        let messageTimeoutId = null;
+        const showAppMessage = (msg, type) => {
+            const appRoot = document.getElementById('app-root');
+            let messageDiv = document.getElementById('app-message');
+            if (!messageDiv) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'app-message';
+                messageDiv.className = 'absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300';
+                appRoot.appendChild(messageDiv);
+            }
+
+            messageDiv.textContent = msg;
+            messageDiv.className = `absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300 ${type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+            messageDiv.style.opacity = '1';
+
+            if (messageTimeoutId) {
+                clearTimeout(messageTimeoutId);
+            }
+            messageTimeoutId = setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                setTimeout(() => {
+                    if (messageDiv.parentNode) {
+                        messageDiv.parentNode.removeChild(messageDiv);
+                    }
+                }, 300); // Allow fade out before removal
+            }, 3000);
+        };
+
+        // --- Local Storage Management ---
+        const saveState = () => {
+            try {
+                localStorage.setItem('lessonPlannerUnits', JSON.stringify(units));
+                localStorage.setItem('lessonPlannerLessons', JSON.stringify(lessons));
+            } catch (e) {
+                console.error("Failed to save data to local storage:", e);
+                showAppMessage("Error saving data to local storage.", 'error');
+            }
+        };
+
+        const loadState = () => {
+            try {
+                units = JSON.parse(localStorage.getItem('lessonPlannerUnits') || '[]');
+                lessons = JSON.parse(localStorage.getItem('lessonPlannerLessons') || '[]');
+                
+                // Initialize localUserId if not present
+                if (!localStorage.getItem('lessonPlannerUserId')) {
+                    localStorage.setItem('lessonPlannerUserId', crypto.randomUUID());
+                }
+                localUserId = localStorage.getItem('lessonPlannerUserId');
+
+                if (units.length > 0) {
+                    selectedUnit = units[0];
+                } else {
+                    selectedUnit = null;
+                }
+            } catch (e) {
+                console.error("Failed to load data from local storage:", e);
+                showAppMessage("Error loading data from local storage. Your data might be corrupted.", 'error');
+            }
+        };
+
+        // --- Core Application Logic (Unit/Lesson Management) ---
+
+        const addUnit = (unitName, startDate, endDate) => {
+            const newUnit = {
+                id: crypto.randomUUID(),
+                name: unitName,
+                startDate: startDate ? startDate.toISOString().split('T')[0] : null,
+                endDate: endDate ? endDate.toISOString().split('T')[0] : null,
+                order: units.length,
+            };
+            units.push(newUnit);
+            units.sort((a, b) => a.order - b.order); // Keep sorted
+            if (!selectedUnit) {
+                selectedUnit = newUnit;
+            }
+            saveState();
+            renderApp();
+            showAppMessage('Unit added successfully!', 'success');
+        };
+
+        const updateUnitDates = (unitId, newStartDate, newEndDate) => {
+            units = units.map(unit => {
+                if (unit.id === unitId) {
+                    const oldStartDate = unit.startDate ? new Date(unit.startDate + 'T00:00:00') : null;
+
+                    let finalStartDate = newStartDate;
+                    let finalEndDate = newEndDate;
+
+                    const lessonsInUnit = lessons.filter(lesson => lesson.unitId === unitId);
+                    let latestLessonDate = null;
+                    if (lessonsInUnit.length > 0) {
+                        latestLessonDate = new Date(Math.max(...lessonsInUnit.map(lesson => new Date(lesson.date + 'T00:00:00'))));
+                    }
+
+                    if (latestLessonDate && finalEndDate && latestLessonDate > finalEndDate) {
+                        finalEndDate = latestLessonDate;
+                    }
+                    if (finalStartDate && finalEndDate && finalStartDate > finalEndDate) {
+                        finalEndDate = finalStartDate;
+                    }
+
+                    let yearDiff = 0;
+                    if (oldStartDate && finalStartDate) {
+                        yearDiff = finalStartDate.getFullYear() - oldStartDate.getFullYear();
+                    }
+
+                    if (yearDiff !== 0) {
+                        lessons = lessons.map(lesson => {
+                            if (lesson.unitId === unitId) {
+                                const lessonDateObj = new Date(lesson.date + 'T00:00:00');
+                                lessonDateObj.setFullYear(lessonDateObj.getFullYear() + yearDiff);
+                                return {
+                                    ...lesson,
+                                    date: lessonDateObj.toISOString().split('T')[0],
+                                };
+                            }
+                            return lesson;
+                        });
+                    }
+
+                    return {
+                        ...unit,
+                        startDate: finalStartDate ? finalStartDate.toISOString().split('T')[0] : null,
+                        endDate: finalEndDate ? finalEndDate.toISOString().split('T')[0] : null,
+                    };
+                }
+                return unit;
+            });
+            saveState();
+            renderApp();
+            showAppMessage('Unit dates updated successfully!', 'success');
+        };
+
+        const deleteUnit = (unitId) => {
+            const lessonsInUnit = lessons.filter(lesson => lesson.unitId === unitId);
+            if (lessonsInUnit.length > 0) {
+                showAppMessage('Cannot delete unit: Please delete all lessons within this unit first.', 'error');
+                return;
+            }
+            units = units.filter(unit => unit.id !== unitId);
+            if (selectedUnit && selectedUnit.id === unitId) {
+                selectedUnit = units.length > 0 ? units[0] : null;
+            }
+            saveState();
+            renderApp();
+            showAppMessage('Unit deleted successfully!', 'success');
+        };
+
+        const reorderUnits = (newOrder) => {
+            units = newOrder.map((unit, index) => ({ ...unit, order: index }));
+            saveState();
+            renderApp();
+        };
+
+        const addLesson = (lessonData) => {
+            if (!selectedUnit) {
+                showAppMessage('Please select a unit first.', 'error');
+                return;
+            }
+            const newLesson = {
+                id: crypto.randomUUID(),
+                ...lessonData,
+                unitId: selectedUnit.id,
+                date: lessonData.date, // Already YYYY-MM-DD string
+                order: lessons.filter(l => l.unitId === selectedUnit.id && isSameDay(l.date, lessonData.date)).length,
+            };
+            lessons.push(newLesson);
+            saveState();
+            renderApp();
+            showAppMessage('Lesson added successfully!', 'success');
+        };
+
+        const updateLesson = (lessonId, updatedData) => {
+            lessons = lessons.map(lesson =>
+                lesson.id === lessonId
+                    ? { ...lesson, ...updatedData, date: updatedData.date }
+                    : lesson
+            );
+            saveState();
+            renderApp();
+            showAppMessage('Lesson updated successfully!', 'success');
+        };
+
+        const deleteLesson = (lessonId) => {
+            lessons = lessons.filter(lesson => lesson.id !== lessonId);
+            saveState();
+            renderApp();
+            showAppMessage('Lesson deleted successfully!', 'success');
+        };
+
+        const reorderLesson = (lessonId, newDate, newOrder) => {
+            lessons = lessons.map(lesson =>
+                lesson.id === lessonId
+                    ? { ...lesson, date: newDate.toISOString().split('T')[0], order: newOrder }
+                    : lesson
+            );
+            saveState();
+            renderApp();
+            showAppMessage('Lesson reordered successfully!', 'success');
+        };
+
+        // --- Modals ---
+        const openModal = (type, data = {}) => {
+            const appRoot = document.getElementById('app-root');
+            let modalOverlay = document.getElementById('modal-overlay');
+            if (!modalOverlay) {
+                modalOverlay = document.createElement('div');
+                modalOverlay.id = 'modal-overlay';
+                modalOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) closeModal();
+                });
+                appRoot.appendChild(modalOverlay);
+            }
+
+            const theme = themes[currentTheme];
+            const modalContent = document.createElement('div');
+            modalContent.className = `${theme.secondaryBg} p-6 rounded-xl shadow-2xl max-w-lg w-full relative`;
+            modalOverlay.innerHTML = ''; // Clear previous content
+            modalOverlay.appendChild(modalContent);
+
+            const closeButton = document.createElement('button');
+            closeButton.className = 'absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold';
+            closeButton.innerHTML = '&times;';
+            closeButton.addEventListener('click', closeModal);
+            modalContent.appendChild(closeButton);
+
+            let formElement;
+            if (type === 'addUnit') {
+                formElement = createAddUnitForm();
+            } else if (type === 'addLesson' || type === 'editLesson') {
+                formElement = createLessonForm(type, data);
+            } else if (type === 'confirmDeleteUnit') {
+                formElement = createConfirmDeleteUnitModal(data);
+            }
+            modalContent.appendChild(formElement);
+        };
+
+        const closeModal = () => {
+            const modalOverlay = document.getElementById('modal-overlay');
+            if (modalOverlay && modalOverlay.parentNode) {
+                modalOverlay.parentNode.removeChild(modalOverlay);
+            }
+            renderApp(); // Re-render the main app to update UI
+        };
+
+        const createAddUnitForm = () => {
+            const theme = themes[currentTheme];
+            const form = document.createElement('form');
+            form.className = 'space-y-4';
+            form.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">Add New Unit</h2>
+                <div>
+                    <label for="unitName" class="block text-sm font-medium mb-1">Unit Title:</label>
+                    <input type="text" id="unitName" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" required />
+                </div>
+                <div>
+                    <label for="unitStartDate" class="block text-sm font-medium mb-1">Start Date (Optional):</label>
+                    <input type="date" id="unitStartDate" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                </div>
+                <div>
+                    <label for="unitEndDate" class="block text-sm font-medium mb-1">End Date (Optional):</label>
+                    <input type="date" id="unitEndDate" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancelAddUnit" class="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition duration-200 ease-in-out">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">Add Unit</button>
+                </div>
+            `;
+            form.querySelector('#cancelAddUnit').addEventListener('click', closeModal);
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const unitName = form.querySelector('#unitName').value.trim();
+                const startDate = form.querySelector('#unitStartDate').value;
+                const endDate = form.querySelector('#unitEndDate').value;
+                if (!unitName) {
+                    showAppMessage('Unit name cannot be empty.', 'error');
+                    return;
+                }
+                addUnit(unitName, startDate ? new Date(startDate + 'T00:00:00') : null, endDate ? new Date(endDate + 'T00:00:00') : null);
+                closeModal();
+            });
+            return form;
+        };
+
+        const createLessonForm = (type, initialData = {}) => {
+            const theme = themes[currentTheme];
+            const form = document.createElement('form');
+            form.className = 'space-y-4';
+            form.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">${type === 'editLesson' ? 'Edit Lesson' : 'Add New Lesson'}</h2>
+                <div>
+                    <label for="lessonTitle" class="block text-sm font-medium mb-1">Lesson Title:</label>
+                    <input type="text" id="lessonTitle" value="${initialData.title || ''}" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" required />
+                </div>
+                <div>
+                    <label for="lessonDate" class="block text-sm font-medium mb-1">Date:</label>
+                    <input type="date" id="lessonDate" value="${initialData.date || ''}" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" required />
+                </div>
+                <div>
+                    <label for="googleSlidesLink" class="block text-sm font-medium mb-1">Google Slides Link:</label>
+                    <input type="url" id="googleSlidesLink" value="${initialData.googleSlidesLink || ''}" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" placeholder="e.g., https://docs.google.com/presentation/d/..." />
+                </div>
+                <div>
+                    <label for="activityAssignment" class="block text-sm font-medium mb-1">Activity/Assignment:</label>
+                    <input type="text" id="activityAssignment" value="${initialData.activityAssignment || ''}" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="isGraded" ${initialData.isGraded ? 'checked' : ''} class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                    <label for="isGraded" class="text-sm font-medium">Graded Assignment</label>
+                </div>
+                <div>
+                    <label for="readings" class="block text-sm font-medium mb-1">Readings:</label>
+                    <textarea id="readings" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" rows="2">${initialData.readings || ''}</textarea>
+                </div>
+                <div>
+                    <label for="additionalLinks" class="block text-sm font-medium mb-1">Additional Links (comma-separated):</label>
+                    <textarea id="additionalLinks" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" rows="2">${initialData.additionalLinks || ''}</textarea>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancelLessonForm" class="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition duration-200 ease-in-out">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">${type === 'editLesson' ? 'Save Changes' : 'Add Lesson'}</button>
+                </div>
+            `;
+            form.querySelector('#cancelLessonForm').addEventListener('click', closeModal);
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const data = {
+                    title: form.querySelector('#lessonTitle').value.trim(),
+                    date: form.querySelector('#lessonDate').value, // YYYY-MM-DD string
+                    googleSlidesLink: form.querySelector('#googleSlidesLink').value,
+                    activityAssignment: form.querySelector('#activityAssignment').value,
+                    isGraded: form.querySelector('#isGraded').checked,
+                    readings: form.querySelector('#readings').value,
+                    additionalLinks: form.querySelector('#additionalLinks').value,
+                };
+                if (!data.title) {
+                    showAppMessage('Lesson title cannot be empty.', 'error');
+                    return;
+                }
+                if (type === 'editLesson') {
+                    updateLesson(initialData.id, data);
+                } else {
+                    addLesson(data);
+                }
+                closeModal();
+            });
+            return form;
+        };
+
+        const createConfirmDeleteUnitModal = (unit) => {
+            const theme = themes[currentTheme];
+            const div = document.createElement('div');
+            div.className = 'space-y-4 text-center';
+            div.innerHTML = `
+                <h2 class="text-xl font-bold">Confirm Deletion</h2>
+                <p>Are you sure you want to delete the unit "<span class="font-semibold">${unit.name}</span>"?</p>
+                <p class="text-red-600 font-semibold">This action cannot be undone.</p>
+                <div class="flex justify-center space-x-4 mt-6">
+                    <button type="button" id="cancelDeleteUnit" class="px-6 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition duration-200 ease-in-out">Cancel</button>
+                    <button type="button" id="confirmDeleteUnit" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105">Delete</button>
+                </div>
+            `;
+            div.querySelector('#cancelDeleteUnit').addEventListener('click', closeModal);
+            div.querySelector('#confirmDeleteUnit').addEventListener('click', () => {
+                deleteUnit(unit.id);
+                closeModal();
+            });
+            return div;
+        };
+
+        // --- Drag and Drop Logic ---
+        let draggedElement = null; // Stores the HTML element being dragged
+        let dragSourceDateString = null; // Stores the date string of the original droppable area
+
+        const handleDragStart = (e) => {
+            draggedElement = e.target.closest('.draggable-lesson');
+            if (!draggedElement) return;
+
+            draggedElement.classList.add('dragging');
+            e.dataTransfer.setData('lessonId', draggedElement.dataset.lessonId);
+            dragSourceDateString = draggedElement.closest('.droppable-date').dataset.droppableId;
+            e.dataTransfer.setData('sourceDate', dragSourceDateString);
+            e.dataTransfer.effectAllowed = 'move';
+        };
+
+        const handleDragOver = (e) => {
+            e.preventDefault(); // Necessary to allow dropping
+            e.dataTransfer.dropEffect = 'move';
+            const target = e.target.closest('.droppable-date');
+            if (target) {
+                // Optional: add visual feedback for drag over
+                // target.classList.add('border-indigo-500');
+            }
+        };
+
+        const handleDragLeave = (e) => {
+            const target = e.target.closest('.droppable-date');
+            if (target) {
+                // target.classList.remove('border-indigo-500');
+            }
+        };
+
+        const handleDrop = (e) => {
+            e.preventDefault();
+            const destinationDroppable = e.target.closest('.droppable-date');
+            if (!destinationDroppable) return;
+
+            const lessonId = e.dataTransfer.getData('lessonId');
+            const sourceDate = e.dataTransfer.getData('sourceDate');
+            const destinationDateString = destinationDroppable.dataset.droppableId;
+            const destinationDate = new Date(destinationDateString + 'T00:00:00'); // Convert to Date object
+
+            const currentLessonsOnDest = lessons.filter(l => isSameDay(l.date, destinationDateString) && l.unitId === selectedUnit.id);
+
+            // Determine the drop index within the destination list
+            const dropTarget = e.target.closest('.draggable-lesson');
+            let newOrder = currentLessonsOnDest.length; // Default to end
+            if (dropTarget) {
+                const dropTargetId = dropTarget.dataset.lessonId;
+                const indexInDest = currentLessonsOnDest.findIndex(l => l.id === dropTargetId);
+                if (indexInDest !== -1) {
+                    newOrder = indexInDest;
+                }
+            }
+
+            // Perform the reorder/move
+            reorderLesson(lessonId, destinationDate, newOrder);
+            
+            // Clean up drag visual feedback
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+            }
+            // destinationDroppable.classList.remove('border-indigo-500');
+            draggedElement = null;
+            dragSourceDateString = null;
+        };
+
+        const handleDragEnd = (e) => {
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+            }
+            draggedElement = null;
+            dragSourceDateString = null;
+            // Any hovered droppable areas should also reset their styles
+            document.querySelectorAll('.droppable-date').forEach(el => {
+                // el.classList.remove('border-indigo-500');
+            });
+        };
+
+
+        // --- UI Rendering Functions ---
+
+        const renderApp = () => {
+            const appRoot = document.getElementById('app-root');
+            appRoot.innerHTML = ''; // Clear previous content
+
+            const theme = themes[currentTheme];
+            appRoot.className = `min-h-screen font-inter flex flex-col ${theme.primaryBg} ${theme.textColor}`;
+
+            // Header
+            const headerElement = document.createElement('header');
+            headerElement.className = `p-4 shadow-md ${theme.secondaryBg} rounded-b-xl`;
+            headerElement.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                    <h1 class="text-3xl font-bold mb-2 md:mb-0">Lesson Planner</h1>
+                    <div class="flex items-center space-x-4">
+                        <p class="text-sm">User ID: <span class="font-mono text-xs break-all">${localUserId || 'N/A'}</span></p>
+                        <button id="menuButton" class="px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">Menu</button>
+                    </div>
+                </div>
+                <div id="unitBar" class="flex overflow-x-auto py-2 space-x-2 scrollbar-hide"></div>
+            `;
+            appRoot.appendChild(headerElement);
+
+            // Menu Overlay (initially hidden)
+            const menuOverlay = document.createElement('div');
+            menuOverlay.id = 'menuOverlay';
+            menuOverlay.className = `absolute right-4 mt-2 w-48 ${theme.secondaryBg} rounded-xl shadow-lg z-50 p-4 hidden`;
+            menuOverlay.innerHTML = `
+                <h3 class="font-bold mb-2">Views</h3>
+                <ul class="space-y-1 mb-4">
+                    <li><button data-view="listView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">List View</button></li>
+                    <li><button data-view="weeklyView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Weekly View</button></li>
+                    <li><button data-view="monthlyView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Monthly Calendar View</button></li>
+                </ul>
+                <h3 class="font-bold mb-2">Themes</h3>
+                <select id="themeSelect" class="w-full p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}"></select>
+                <h3 class="font-bold mb-2 mt-4">Data Management</h3>
+                <ul class="space-y-1">
+                    <li><button id="exportDataButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Export Data</button></li>
+                    <li>
+                        <button id="importDataButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Import Data</button>
+                        <input type="file" id="importFileInput" accept=".json" class="hidden" />
+                    </li>
+                </ul>
+            `;
+            headerElement.appendChild(menuOverlay);
+
+            // Populate theme select
+            const themeSelect = menuOverlay.querySelector('#themeSelect');
+            for (const themeName in themes) {
+                if (themeName === 'liquidGlass') continue; // Skip liquidGlass
+                const option = document.createElement('option');
+                option.value = themeName;
+                option.textContent = themeName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                themeSelect.appendChild(option);
+            }
+            themeSelect.value = currentTheme; // Set current theme
+
+            // Event listeners for menu
+            headerElement.querySelector('#menuButton').addEventListener('click', () => {
+                menuOverlay.classList.toggle('hidden');
+            });
+            menuOverlay.querySelectorAll('[data-view]').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    currentView = e.target.dataset.view;
+                    menuOverlay.classList.add('hidden');
+                    renderApp();
+                });
+            });
+            themeSelect.addEventListener('change', (e) => {
+                currentTheme = e.target.value;
+                menuOverlay.classList.add('hidden');
+                renderApp();
+            });
+            menuOverlay.querySelector('#exportDataButton').addEventListener('click', () => {
+                handleExportData();
+                menuOverlay.classList.add('hidden');
+            });
+            menuOverlay.querySelector('#importDataButton').addEventListener('click', () => {
+                document.getElementById('importFileInput').click();
+                menuOverlay.classList.add('hidden');
+            });
+            document.getElementById('importFileInput').addEventListener('change', handleImportData);
+
+
+            // Unit Bar
+            const unitBar = headerElement.querySelector('#unitBar');
+            units.forEach((unitItem, index) => {
+                const unitDiv = document.createElement('div');
+                unitDiv.className = `flex-shrink-0 px-4 py-2 rounded-xl cursor-pointer transition duration-200 ease-in-out ${selectedUnit && selectedUnit.id === unitItem.id ? theme.accentColor : `${theme.secondaryBg} ${theme.borderColor} border`} ${theme.hoverBg}`;
+                unitDiv.textContent = unitItem.name;
+                unitDiv.dataset.unitId = unitItem.id;
+                unitDiv.draggable = true;
+
+                unitDiv.addEventListener('click', () => {
+                    selectedUnit = unitItem;
+                    renderApp();
+                });
+                unitDiv.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('unitId', unitItem.id);
+                    e.dataTransfer.setData('unitIndex', index);
+                    e.dataTransfer.effectAllowed = 'move';
+                    unitDiv.classList.add('dragging');
+                });
+                unitDiv.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                });
+                unitDiv.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const draggedUnitId = e.dataTransfer.getData('unitId');
+                    const draggedUnitIndex = parseInt(e.dataTransfer.getData('unitIndex'), 10);
+                    const droppedOnUnitId = unitItem.id;
+                    const droppedOnUnitIndex = index;
+
+                    if (draggedUnitId === droppedOnUnitId) return; // Dropping on itself
+
+                    const reorderedUnitsArray = Array.from(units);
+                    const [removed] = reorderedUnitsArray.splice(draggedUnitIndex, 1);
+                    reorderedUnitsArray.splice(droppedOnUnitIndex, 0, removed);
+
+                    reorderUnits(reorderedUnitsArray);
+                });
+                unitDiv.addEventListener('dragend', (e) => {
+                    unitDiv.classList.remove('dragging');
+                });
+                unitBar.appendChild(unitDiv);
+            });
+
+            const addUnitButton = document.createElement('button');
+            addUnitButton.className = `${theme.buttonBg} flex-shrink-0 px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105`;
+            addUnitButton.textContent = '+ Add Unit';
+            addUnitButton.addEventListener('click', () => openModal('addUnit'));
+            unitBar.appendChild(addUnitButton);
+
+
+            // Main Content Area
+            const mainContent = document.createElement('main');
+            mainContent.className = 'flex-1 p-4 overflow-auto';
+            appRoot.appendChild(mainContent);
+
+            if (selectedUnit) {
+                renderLessonPlanner(mainContent);
+            } else {
+                const noUnitMessage = document.createElement('div');
+                noUnitMessage.className = 'flex flex-col items-center justify-center h-full text-center py-20';
+                noUnitMessage.innerHTML = `
+                    <p class="text-xl font-semibold mb-4">No unit selected or created yet.</p>
+                    <button id="addFirstUnitButton" class="px-6 py-3 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">Add Your First Unit</button>
+                `;
+                noUnitMessage.querySelector('#addFirstUnitButton').addEventListener('click', () => openModal('addUnit'));
+                mainContent.appendChild(noUnitMessage);
+            }
+        };
+
+        const renderLessonPlanner = (parentElement) => {
+            parentElement.innerHTML = '';
+            const theme = themes[currentTheme];
+
+            const plannerDiv = document.createElement('div');
+            plannerDiv.className = `p-4 rounded-xl shadow-lg ${theme.secondaryBg}`;
+            parentElement.appendChild(plannerDiv);
+
+            const headerDiv = document.createElement('div');
+            headerDiv.className = `flex justify-between items-center mb-4 pb-4 border-b-2 border-dashed`;
+            headerDiv.style.borderColor = theme.borderColor.split('-').pop();
+            headerDiv.innerHTML = `
+                <h2 class="text-2xl font-bold">${selectedUnit.name}</h2>
+                <button id="deleteUnitButton" class="text-red-500 hover:text-red-700 font-semibold transition duration-200 ease-in-out">Delete Unit</button>
+            `;
+            plannerDiv.appendChild(headerDiv);
+            headerDiv.querySelector('#deleteUnitButton').addEventListener('click', () => openModal('confirmDeleteUnit', selectedUnit));
+
+            const dateRangeDiv = document.createElement('div');
+            dateRangeDiv.className = `mb-6 p-4 rounded-lg border-2`;
+            dateRangeDiv.style.borderColor = theme.borderColor.split('-').pop();
+            dateRangeDiv.innerHTML = `
+                <h3 class="text-lg font-semibold mb-2">Unit Date Range</h3>
+                <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                    <label class="flex items-center space-x-2">
+                        <span>Start Date:</span>
+                        <input type="date" id="unitStartDateInput" value="${selectedUnit.startDate || ''}" class="p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <span>End Date:</span>
+                        <input type="date" id="unitEndDateInput" value="${selectedUnit.endDate || ''}" class="p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                    </label>
+                    <button id="updateDatesButton" class="px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">Update Dates</button>
+                </div>
+            `;
+            plannerDiv.appendChild(dateRangeDiv);
+
+            const unitStartDateInput = dateRangeDiv.querySelector('#unitStartDateInput');
+            const unitEndDateInput = dateRangeDiv.querySelector('#unitEndDateInput');
+            dateRangeDiv.querySelector('#updateDatesButton').addEventListener('click', () => {
+                const newStartDate = unitStartDateInput.value ? new Date(unitStartDateInput.value + 'T00:00:00') : null;
+                const newEndDate = unitEndDateInput.value ? new Date(unitEndDateInput.value + 'T00:00:00') : null;
+                if (newStartDate && newEndDate && newStartDate > newEndDate) {
+                    showAppMessage('Start date cannot be after end date.', 'error');
+                    return;
+                }
+                updateUnitDates(selectedUnit.id, newStartDate, newEndDate);
+            });
+
+            const filteredLessons = lessons.filter(lesson => lesson.unitId === selectedUnit.id);
+            const weekdays = selectedUnit.startDate && selectedUnit.endDate ? getWeekdaysInRange(new Date(selectedUnit.startDate + 'T00:00:00'), new Date(selectedUnit.endDate + 'T00:00:00')) : [];
+
+            const lessonsByDate = weekdays.reduce((acc, date) => {
+                acc[date.toDateString()] = filteredLessons
+                    .filter(lesson => isSameDay(lesson.date, date))
+                    .sort((a, b) => a.order - b.order);
+                return acc;
+            }, {});
+
+            if (currentView === 'listView') {
+                renderListView(plannerDiv, weekdays, lessonsByDate);
+            } else if (currentView === 'weeklyView') {
+                renderWeeklyView(plannerDiv, weekdays, lessonsByDate);
+            } else if (currentView === 'monthlyView') {
+                renderMonthlyView(plannerDiv, filteredLessons, selectedUnit.id);
+            }
+        };
+
+        const renderListView = (parentElement, weekdays, lessonsByDate) => {
+            const theme = themes[currentTheme];
+            const listViewContainer = document.createElement('div');
+            listViewContainer.className = `p-4 rounded-lg shadow-md border ${theme.borderColor}`;
+            parentElement.appendChild(listViewContainer);
+
+            if (weekdays.length === 0) {
+                listViewContainer.innerHTML = `<p class="text-center text-gray-500 py-4">Please set a date range for this unit.</p>`;
+                return;
+            }
+
+            const listContent = document.createElement('div');
+            listContent.className = "flex flex-col";
+            listViewContainer.appendChild(listContent);
+
+            weekdays.forEach(date => {
+                const dateRow = document.createElement('div');
+                dateRow.className = `flex flex-col md:flex-row border-b last:border-b-0 py-4`;
+                dateRow.style.borderColor = theme.borderColor.split('-').pop();
+                dateRow.dataset.droppableId = date.toDateString(); // Make date row a droppable target
+                dateRow.addEventListener('dragover', handleDragOver);
+                dateRow.addEventListener('dragleave', handleDragLeave);
+                dateRow.addEventListener('drop', handleDrop);
+
+                const dateColumn = document.createElement('div');
+                dateColumn.className = `flex flex-row md:flex-col items-center md:items-start justify-between md:justify-start pr-4 md:border-r md:w-1/4 flex-shrink-0 mb-2 md:mb-0`;
+                dateColumn.style.borderColor = theme.borderColor.split('-').pop();
+                dateColumn.innerHTML = `
+                    <h3 class="text-xl font-semibold mb-0 md:mb-2">${formatDate(date)}</h3>
+                    <button class="add-lesson-button w-8 h-8 flex items-center justify-center rounded-full text-lg font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>
+                `;
+                dateColumn.querySelector('.add-lesson-button').addEventListener('click', (e) => {
+                    openModal('addLesson', { date: e.target.dataset.date });
+                });
+                dateRow.appendChild(dateColumn);
+
+                const lessonsColumn = document.createElement('div');
+                lessonsColumn.className = `flex-grow md:pl-4`;
+                dateRow.appendChild(lessonsColumn);
+
+                renderLessonList(lessonsColumn, lessonsByDate[date.toDateString()] || [], date);
+                listContent.appendChild(dateRow);
+            });
+        };
+
+        const renderWeeklyView = (parentElement, weekdays, lessonsByDate) => {
+            const theme = themes[currentTheme];
+            const weeklyViewContainer = document.createElement('div');
+            weeklyViewContainer.className = `space-y-8`;
+            parentElement.appendChild(weeklyViewContainer);
+
+            if (weekdays.length === 0) {
+                weeklyViewContainer.innerHTML = `<p class="text-center text-gray-500">Please set a date range for this unit.</p>`;
+                return;
+            }
+
+            const weeks = [];
+            let currentWeek = [];
+            for (let i = 0; i < weekdays.length; i++) {
+                currentWeek.push(weekdays[i]);
+                if (currentWeek.length === 5 || i === weekdays.length - 1) {
+                    weeks.push(currentWeek);
+                    currentWeek = [];
+                } else if (weekdays[i + 1] && weekdays[i + 1].getDay() === 1) {
+                    weeks.push(currentWeek);
+                    currentWeek = [];
+                }
+            }
+
+            weeks.forEach((week, weekIndex) => {
+                const weekDiv = document.createElement('div');
+                weekDiv.className = `p-4 rounded-lg shadow-md border ${theme.borderColor}`;
+                weekDiv.innerHTML = `<h3 class="text-xl font-bold mb-4">Week of ${formatDate(week[0])} - ${formatDate(week[week.length - 1])}</h3>`;
+                const daysGrid = document.createElement('div');
+                daysGrid.className = `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-2`;
+                weekDiv.appendChild(daysGrid);
+
+                week.forEach(date => {
+                    const dayCard = document.createElement('div');
+                    dayCard.className = `p-3 rounded-lg border ${theme.borderColor} ${theme.secondaryBg} min-h-[200px] droppable-date`;
+                    dayCard.dataset.droppableId = date.toDateString(); // Make day card a droppable target
+                    dayCard.addEventListener('dragover', handleDragOver);
+                    dayCard.addEventListener('dragleave', handleDragLeave);
+                    dayCard.addEventListener('drop', handleDrop);
+
+                    dayCard.innerHTML = `
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-semibold">${formatDate(date)}</h4>
+                            <button class="add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-sm font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>
+                        </div>
+                    `;
+                    dayCard.querySelector('.add-lesson-button').addEventListener('click', (e) => {
+                        openModal('addLesson', { date: e.target.dataset.date });
+                    });
+
+                    renderLessonList(dayCard, lessonsByDate[date.toDateString()] || [], date);
+                    daysGrid.appendChild(dayCard);
+                });
+                weeklyViewContainer.appendChild(weekDiv);
+            });
+        };
+
+        const renderMonthlyView = (parentElement, allLessons, selectedUnitId) => {
+            const theme = themes[currentTheme];
+            const monthlyViewContainer = document.createElement('div');
+            monthlyViewContainer.className = `p-4 rounded-lg shadow-md border ${theme.borderColor}`;
+            parentElement.appendChild(monthlyViewContainer);
+
+            let currentMonth = new Date(); // Use current date for initial month view
+
+            const renderMonth = (monthDate) => {
+                monthlyViewContainer.innerHTML = ''; // Clear previous month content
+
+                const headerControls = document.createElement('div');
+                headerControls.className = `flex justify-between items-center mb-4`;
+                headerControls.innerHTML = `
+                    <button id="prevMonthButton" class="${theme.buttonBg} px-3 py-1 rounded-xl font-semibold">&lt; Prev</button>
+                    <h3 class="text-xl font-bold">${monthDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                    <button id="nextMonthButton" class="${theme.buttonBg} px-3 py-1 rounded-xl font-semibold">Next &gt;</button>
+                `;
+                monthlyViewContainer.appendChild(headerControls);
+
+                headerControls.querySelector('#prevMonthButton').addEventListener('click', () => {
+                    monthDate.setMonth(monthDate.getMonth() - 1);
+                    renderMonth(monthDate);
+                });
+                headerControls.querySelector('#nextMonthButton').addEventListener('click', () => {
+                    monthDate.setMonth(monthDate.getMonth() + 1);
+                    renderMonth(monthDate);
+                });
+
+                const daysOfWeekHeader = document.createElement('div');
+                daysOfWeekHeader.className = `grid grid-cols-7 gap-1 text-center font-semibold mb-2`;
+                daysOfWeekHeader.innerHTML = `
+                    <div class="py-2">Mon</div><div class="py-2">Tue</div><div class="py-2">Wed</div><div class="py-2">Thu</div><div class="py-2">Fri</div><div class="py-2">Sat</div><div class="py-2">Sun</div>
+                `;
+                monthlyViewContainer.appendChild(daysOfWeekHeader);
+
+                const daysGrid = document.createElement('div');
+                daysGrid.className = `grid grid-cols-7 gap-1`;
+                monthlyViewContainer.appendChild(daysGrid);
+
+                const year = monthDate.getFullYear();
+                const month = monthDate.getMonth();
+                const numDays = new Date(year, month + 1, 0).getDate();
+                const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 for Sunday, 1 for Monday
+
+                const daysInCalendar = [];
+                // Add empty cells for days before the 1st of the month (adjusting for Monday start)
+                for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
+                    daysInCalendar.push(null);
+                }
+                // Add actual days of the month
+                for (let i = 1; i <= numDays; i++) {
+                    daysInCalendar.push(new Date(year, month, i));
+                }
+
+                daysInCalendar.forEach((date, index) => {
+                    const dayCell = document.createElement('div');
+                    dayCell.className = `min-h-[180px] p-1 border ${theme.borderColor} rounded-lg flex flex-col ${date ? theme.secondaryBg : 'bg-gray-100'} ${date && (date.getDay() !== 0 && date.getDay() !== 6) ? 'droppable-date' : ''}`;
+                    
+                    if (date && (date.getDay() !== 0 && date.getDay() !== 6)) { // Only droppable for weekdays
+                        dayCell.dataset.droppableId = date.toDateString();
+                        dayCell.addEventListener('dragover', handleDragOver);
+                        dayCell.addEventListener('dragleave', handleDragLeave);
+                        dayCell.addEventListener('drop', handleDrop);
+                    }
+
+                    if (date) {
+                        dayCell.innerHTML = `
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-sm">${date.getDate()}</span>
+                                ${date.getDay() !== 0 && date.getDay() !== 6 ? `<button class="add-lesson-button w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>` : ''}
+                            </div>
+                        `;
+                        if (date.getDay() !== 0 && date.getDay() !== 6) {
+                            dayCell.querySelector('.add-lesson-button').addEventListener('click', (e) => {
+                                openModal('addLesson', { date: e.target.dataset.date });
+                            });
+                        }
+                        
+                        const lessonsForDay = allLessons.filter(lesson => isSameDay(lesson.date, date) && lesson.unitId === selectedUnitId);
+                        renderLessonList(dayCell, lessonsForDay, date);
+                    } else {
+                        dayCell.innerHTML = `<div class="h-full"></div>`;
+                    }
+                    daysGrid.appendChild(dayCell);
+                });
+            };
+
+            renderMonth(currentMonth);
+        };
+
+
+        const renderLessonList = (parentElement, lessonsForDate, date) => {
+            parentElement.innerHTML = ''; // Clear existing lessons
+            const theme = themes[currentTheme];
+
+            if (lessonsForDate.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'text-gray-500 text-sm italic';
+                p.textContent = 'No lessons planned.';
+                parentElement.appendChild(p);
+                return;
+            }
+
+            const listDiv = document.createElement('div');
+            listDiv.className = 'space-y-1'; // More compact spacing
+            parentElement.appendChild(listDiv);
+
+            lessonsForDate.forEach((lesson, index) => {
+                const lessonDiv = document.createElement('div');
+                lessonDiv.className = `p-2 rounded-lg shadow-sm cursor-grab draggable-lesson ${lesson.isGraded ? `${theme.gradedBg} ${theme.gradedBorder} border-2` : `${theme.secondaryBg} border ${theme.borderColor}`} ${theme.hoverBg}`;
+                lessonDiv.dataset.lessonId = lesson.id;
+                lessonDiv.draggable = true;
+                lessonDiv.addEventListener('dragstart', handleDragStart);
+                lessonDiv.addEventListener('dragend', handleDragEnd);
+
+                lessonDiv.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium truncate">${lesson.title}</span>
+                        <div class="flex space-x-1">
+                            <button class="edit-lesson-button text-blue-500 hover:text-blue-700 text-sm" aria-label="Edit Lesson">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                            </button>
+                            <button class="delete-lesson-button text-red-500 hover:text-red-700 text-sm" aria-label="Delete Lesson">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-gray-600 text-sm mt-1">
+                        ${lesson.activityAssignment ? `<p class="truncate">Activity: ${lesson.activityAssignment}</p>` : ''}
+                        ${lesson.readings ? `<p class="truncate">Readings: ${lesson.readings}</p>` : ''}
+                        ${lesson.googleSlidesLink ? `<p><a href="${lesson.googleSlidesLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline truncate">Slides Link</a></p>` : ''}
+                        ${lesson.additionalLinks ? `<p class="truncate">Links: ${lesson.additionalLinks}</p>` : ''}
+                    </div>
+                `;
+                lessonDiv.querySelector('.edit-lesson-button').addEventListener('click', () => openModal('editLesson', lesson));
+                lessonDiv.querySelector('.delete-lesson-button').addEventListener('click', () => deleteLesson(lesson.id));
+                listDiv.appendChild(lessonDiv);
+            });
+        };
+
+        // --- Export/Import Functions ---
+        const handleExportData = () => {
+            const data = {
+                units: units,
+                lessons: lessons,
+            };
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const today = new Date();
+            const dateString = today.toISOString().split('T')[0];
+            a.download = `lesson_planner_backup_${dateString}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showAppMessage('Data exported successfully!', 'success');
+        };
+
+        const handleImportData = (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData.units && Array.isArray(importedData.units) &&
+                        importedData.lessons && Array.isArray(importedData.lessons)) {
+                        
+                        units = importedData.units;
+                        lessons = importedData.lessons;
+                        if (units.length > 0) {
+                            selectedUnit = units[0];
+                        } else {
+                            selectedUnit = null;
+                        }
+                        saveState();
+                        renderApp();
+                        showAppMessage('Data imported successfully!', 'success');
+                    } else {
+                        showAppMessage('Invalid file format. Please import a valid lesson planner JSON file.', 'error');
+                    }
+                } catch (error) {
+                    console.error("Error importing data:", error);
+                    showAppMessage('Error importing data. Make sure the file is a valid JSON.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // --- Initial Load and Render ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            renderApp();
+        });
+    </script>
 </body>
 </html>
