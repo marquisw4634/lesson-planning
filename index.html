@@ -992,7 +992,7 @@
             headerDiv.className = `flex justify-between items-center mb-4 pb-4 border-b-2 border-dashed`;
             headerDiv.style.borderColor = theme.borderColor.split('-').pop();
             headerDiv.innerHTML = `
-                <h2 class="text-2xl font-bold">${selectedUnit.name}</h2>
+                <h2 class="text-2xl font-bold">${escapeHtml(selectedUnit.name)}</h2>
                 <button id="deleteUnitButton" class="text-red-500 hover:text-red-700 font-semibold transition duration-200 ease-in-out">Delete Unit</button>
             `;
             plannerDiv.appendChild(headerDiv);
@@ -1177,7 +1177,7 @@
                         dayHeaderStrip.appendChild(dateSpan);
 
                         const addButton = document.createElement('button');
-                        addButton.className = `add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition duration-300 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
+                        addButton.className = `add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
                         addButton.textContent = '+';
                         addButton.dataset.date = dateISOString;
                         addButton.addEventListener('click', (e) => {
@@ -1196,9 +1196,9 @@
                         } else { // Student View
                             lessonsContentArea.innerHTML = lessonsForDay.map(lesson => `
                                 <div class="p-2 rounded-lg ${lesson.isGraded ? `${theme.gradedBg} ${theme.gradedBorder} border` : 'bg-gray-50'}">
-                                    <p class="font-bold text-base truncate">${lesson.title}</p>
-                                    ${lesson.activityAssignment ? `<p class="text-gray-700 truncate"><span class="font-bold">Assignment:</span> ${lesson.activityAssignment}</p>` : ''}
-                                    ${lesson.readings ? `<p class="text-gray-600 truncate"><span class="font-bold">Readings:</span> ${lesson.readings}</p>` : ''}
+                                    <p class="font-bold text-base truncate">${escapeHtml(lesson.title)}</p>
+                                    ${lesson.activityAssignment ? `<p class="text-gray-700 truncate"><span class="font-bold">Assignment:</span> ${escapeHtml(lesson.activityAssignment)}</p>` : ''}
+                                    ${lesson.readings ? `<p class="text-gray-600 truncate"><span class="font-bold">Readings:</span> ${escapeHtml(lesson.readings)}</p>` : ''}
                                 </div>
                             `).join('');
 
@@ -1229,7 +1229,7 @@
                     ul.className = 'list-disc list-inside space-y-1';
                     gradedAssignmentsForWeek.forEach(assignment => {
                         const li = document.createElement('li');
-                        li.textContent = `${assignment.title}${assignment.assignment ? `: ${assignment.assignment}` : ''} (${assignment.date})`;
+                        li.textContent = `${escapeHtml(assignment.title)}${assignment.assignment ? `: ${escapeHtml(assignment.assignment)}` : ''} (${escapeHtml(assignment.date)})`;
                         ul.appendChild(li);
                     });
                     gradedAssignmentsSummary.appendChild(ul);
@@ -1405,6 +1405,7 @@
             const data = {
                 units: units,
                 lessons: lessons,
+                userTabs: userTabs // Include userTabs in export
             };
             const jsonString = JSON.stringify(data, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1436,6 +1437,8 @@
                         
                         units = importedData.units;
                         lessons = importedData.lessons;
+                        userTabs = importedData.userTabs || []; // Import userTabs, default to empty array if not present
+                        
                         if (units.length > 0) {
                             selectedUnit = units[0];
                         } else {
