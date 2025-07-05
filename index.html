@@ -25,6 +25,34 @@
             opacity: 0.5;
             border: 2px dashed #6366f1; /* Tailwind indigo-500 */
         }
+        .droppable-date.highlight-drop {
+            border: 2px solid #3b82f6; /* Tailwind blue-500 */
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        /* Explicit style for the day header strip to ensure visibility */
+        .day-header-strip {
+            padding: 0.25rem;
+        }
+        /* Student View specific styles */
+        .student-view-day-card {
+            text-align: center; /* Center text in student view day cards */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align content to top */
+            align-items: center; /* Center horizontally */
+        }
+        /* Tab specific styles */
+        .tab-item {
+            cursor: pointer;
+            border-bottom: none;
+            position: relative;
+            z-index: 10; /* Ensure tabs are above main content */
+            margin-bottom: -1px; /* Overlap with content border */
+        }
+        .tab-item.active {
+            border-bottom: 1px solid transparent; /* Hide bottom border when active */
+            z-index: 11;
+        }
     </style>
 </head>
 <body>
@@ -38,8 +66,20 @@
         let currentView = 'listView'; // listView, weeklyView, monthlyView
         let currentTheme = 'default';
         let localUserId = ''; // For local storage, a persistent 'user ID'
+        let isWeeklyStudentView = false; // New state for weekly view toggle
+        let userTabs = []; // New global state for custom tabs
 
         // --- Utility Functions ---
+
+        // Utility to escape HTML for attribute values
+        const escapeHtml = (unsafe) => {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        };
 
         // Function to format dates
         const formatDate = (date) => {
@@ -57,6 +97,7 @@
         // Function to get all weekdays between two dates
         const getWeekdaysInRange = (startDate, endDate) => {
             const dates = [];
+            // Ensure startDate and endDate are interpreted as local dates for iteration
             let current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
             const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
@@ -88,13 +129,13 @@
                 primaryBg: 'bg-gray-100',
                 secondaryBg: 'bg-white',
                 textColor: 'text-gray-900',
-                accentColor: 'bg-purple-600 text-white',
+                accentColor: 'bg-blue-700 text-white', /* Changed from purple */
                 borderColor: 'border-gray-300',
                 hoverBg: 'hover:bg-gray-200',
-                buttonBg: 'bg-purple-500 hover:bg-purple-600 text-white',
-                inputBorder: 'border-gray-400 focus:border-purple-500',
-                gradedBg: 'bg-pink-100',
-                gradedBorder: 'border-pink-400',
+                buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white', /* Changed from purple */
+                inputBorder: 'border-gray-400 focus:border-blue-600', /* Changed from purple */
+                gradedBg: 'bg-red-100',
+                gradedBorder: 'border-red-400',
             },
             monochrome: {
                 primaryBg: 'bg-gray-50',
@@ -109,14 +150,14 @@
                 gradedBorder: 'border-red-300',
             },
             watercolors: {
-                primaryBg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+                primaryBg: 'bg-gradient-to-br from-blue-50 to-green-50', /* Changed from purple/pink */
                 secondaryBg: 'bg-white bg-opacity-80 rounded-lg shadow-md',
                 textColor: 'text-gray-800',
-                accentColor: 'bg-pink-500 text-white',
-                borderColor: 'border-purple-200',
-                hoverBg: 'hover:bg-purple-50',
-                buttonBg: 'bg-pink-400 hover:bg-pink-500 text-white',
-                inputBorder: 'border-purple-300 focus:border-pink-400',
+                accentColor: 'bg-teal-500 text-white', /* Changed from pink */
+                borderColor: 'border-blue-200',
+                hoverBg: 'hover:bg-blue-50',
+                buttonBg: 'bg-teal-400 hover:bg-teal-500 text-white', /* Changed from pink */
+                inputBorder: 'border-blue-300 focus:border-teal-400', /* Changed from pink */
                 gradedBg: 'bg-red-100 bg-opacity-80',
                 gradedBorder: 'border-red-400',
             },
@@ -133,16 +174,16 @@
                 gradedBorder: 'border-red-400',
             },
             earthToned: {
-                primaryBg: 'bg-yellow-50',
-                secondaryBg: 'bg-white',
-                textColor: 'text-gray-800',
-                accentColor: 'bg-orange-600 text-white',
-                borderColor: 'border-yellow-200',
-                hoverBg: 'hover:bg-yellow-100',
-                buttonBg: 'bg-orange-500 hover:bg-orange-600 text-white',
-                inputBorder: 'border-yellow-300 focus:border-orange-500',
-                gradedBg: 'bg-red-100',
-                gradedBorder: 'border-red-400',
+                primaryBg: 'bg-orange-50', /* Lighter brownish-orange */
+                secondaryBg: 'bg-amber-100', /* Light amber/brown */
+                textColor: 'text-stone-800',
+                accentColor: 'bg-orange-800 text-white', /* Darker brownish-orange */
+                borderColor: 'border-orange-300',
+                hoverBg: 'hover:bg-orange-200',
+                buttonBg: 'bg-orange-700 hover:bg-orange-800 text-white', /* Darker button */
+                inputBorder: 'border-orange-400 focus:border-orange-600',
+                gradedBg: 'bg-red-200', /* Slightly more subdued red for graded */
+                gradedBorder: 'border-red-500',
             },
         };
 
@@ -180,6 +221,7 @@
             try {
                 localStorage.setItem('lessonPlannerUnits', JSON.stringify(units));
                 localStorage.setItem('lessonPlannerLessons', JSON.stringify(lessons));
+                localStorage.setItem('lessonPlannerUserTabs', JSON.stringify(userTabs)); // Save user tabs
             } catch (e) {
                 console.error("Failed to save data to local storage:", e);
                 showAppMessage("Error saving data to local storage.", 'error');
@@ -190,6 +232,7 @@
             try {
                 units = JSON.parse(localStorage.getItem('lessonPlannerUnits') || '[]');
                 lessons = JSON.parse(localStorage.getItem('lessonPlannerLessons') || '[]');
+                userTabs = JSON.parse(localStorage.getItem('lessonPlannerUserTabs') || '[]'); // Load user tabs
                 
                 // Initialize localUserId if not present
                 if (!localStorage.getItem('lessonPlannerUserId')) {
@@ -228,37 +271,43 @@
             showAppMessage('Unit added successfully!', 'success');
         };
 
-        const updateUnitDates = (unitId, newStartDate, newEndDate) => {
+        const updateUnitDates = (unitId, newStartDateObj, newEndDateObj) => {
             units = units.map(unit => {
                 if (unit.id === unitId) {
-                    const oldStartDate = unit.startDate ? new Date(unit.startDate + 'T00:00:00') : null;
+                    const oldStartDateObj = unit.startDate ? new Date(unit.startDate + 'T00:00:00') : null;
+                    
+                    let finalStartDate = newStartDateObj;
+                    let finalEndDate = newEndDateObj;
 
-                    let finalStartDate = newStartDate;
-                    let finalEndDate = newEndDate;
-
+                    // Find the latest lesson date for this unit
                     const lessonsInUnit = lessons.filter(lesson => lesson.unitId === unitId);
-                    let latestLessonDate = null;
+                    let latestLessonDateObj = null;
                     if (lessonsInUnit.length > 0) {
-                        latestLessonDate = new Date(Math.max(...lessonsInUnit.map(lesson => new Date(lesson.date + 'T00:00:00'))));
+                        latestLessonDateObj = new Date(Math.max(...lessonsInUnit.map(lesson => new Date(lesson.date + 'T00:00:00'))));
                     }
 
-                    if (latestLessonDate && finalEndDate && latestLessonDate > finalEndDate) {
-                        finalEndDate = latestLessonDate;
+                    // Adjust finalEndDate if it cuts off lessons
+                    if (latestLessonDateObj && finalEndDate && latestLessonDateObj > finalEndDate) {
+                        finalEndDate = latestLessonDateObj;
                     }
+                    // Also ensure finalEndDate is not before finalStartDate
                     if (finalStartDate && finalEndDate && finalStartDate > finalEndDate) {
                         finalEndDate = finalStartDate;
                     }
 
-                    let yearDiff = 0;
-                    if (oldStartDate && finalStartDate) {
-                        yearDiff = finalStartDate.getFullYear() - oldStartDate.getFullYear();
+                    // Calculate day difference for shifting lessons
+                    let dayDiff = 0;
+                    if (oldStartDateObj && finalStartDate) {
+                        // Calculate difference in milliseconds, then convert to days
+                        dayDiff = Math.round((finalStartDate.getTime() - oldStartDateObj.getTime()) / (1000 * 60 * 60 * 24));
                     }
 
-                    if (yearDiff !== 0) {
+                    // Shift lessons if there's a day difference in the unit start date
+                    if (dayDiff !== 0) {
                         lessons = lessons.map(lesson => {
                             if (lesson.unitId === unitId) {
                                 const lessonDateObj = new Date(lesson.date + 'T00:00:00');
-                                lessonDateObj.setFullYear(lessonDateObj.getFullYear() + yearDiff);
+                                lessonDateObj.setDate(lessonDateObj.getDate() + dayDiff);
                                 return {
                                     ...lesson,
                                     date: lessonDateObj.toISOString().split('T')[0],
@@ -276,6 +325,8 @@
                 }
                 return unit;
             });
+            // Update selectedUnit to reference the newly updated object from the units array
+            selectedUnit = units.find(u => u.id === unitId);
             saveState();
             renderApp();
             showAppMessage('Unit dates updated successfully!', 'success');
@@ -311,7 +362,7 @@
                 id: crypto.randomUUID(),
                 ...lessonData,
                 unitId: selectedUnit.id,
-                date: lessonData.date, // Already YYYY-MM-DD string
+                date: lessonData.date, // Already ISO-formatted date string
                 order: lessons.filter(l => l.unitId === selectedUnit.id && isSameDay(l.date, lessonData.date)).length,
             };
             lessons.push(newLesson);
@@ -338,12 +389,52 @@
             showAppMessage('Lesson deleted successfully!', 'success');
         };
 
-        const reorderLesson = (lessonId, newDate, newOrder) => {
-            lessons = lessons.map(lesson =>
-                lesson.id === lessonId
-                    ? { ...lesson, date: newDate.toISOString().split('T')[0], order: newOrder }
-                    : lesson
-            );
+        const reorderLesson = (lessonId, newDateObj, newOrder) => {
+            console.log(`Reordering lesson ${lessonId} to date ${newDateObj.toISOString().split('T')[0]} with requested order ${newOrder}`);
+            let allLessonsCopy = [...lessons]; // Start with the global lessons array
+
+            // 1. Find and remove the dragged lesson
+            let draggedLessonIndex = allLessonsCopy.findIndex(l => l.id === lessonId);
+            if (draggedLessonIndex === -1) {
+                console.error("ReorderLesson: Dragged lesson not found in lessons array.");
+                return; // Should not happen
+            }
+            let draggedLesson = allLessonsCopy.splice(draggedLessonIndex, 1)[0];
+            console.log("Dragged lesson removed:", draggedLesson);
+
+            // 2. Update its date
+            draggedLesson.date = newDateObj.toISOString().split('T')[0];
+            console.log("Dragged lesson new date:", draggedLesson.date);
+
+            // 3. Add it back to the array
+            allLessonsCopy.push(draggedLesson);
+            console.log("Dragged lesson re-added. Array length:", allLessonsCopy.length);
+
+            // 4. Re-index ALL lessons within the selected unit based on their date and then their current order
+            const lessonsInSelectedUnit = allLessonsCopy.filter(l => l.unitId === selectedUnit.id)
+                                                       .sort((a, b) => {
+                                                           // Sort by date first
+                                                           const dateA = new Date(a.date + 'T00:00:00');
+                                                           const dateB = new Date(b.date + 'T00:00:00');
+                                                           if (dateA.getTime() !== dateB.getTime()) {
+                                                               return dateA.getTime() - dateB.getTime();
+                                                           }
+                                                           // Then by existing order for lessons on the same day
+                                                           return a.order - b.order;
+                                                       });
+            console.log("Lessons in selected unit (sorted):", lessonsInSelectedUnit.map(l => ({id: l.id, date: l.date, order: l.order})));
+
+            // Re-assign `order` property for lessons within the selected unit
+            lessonsInSelectedUnit.forEach((lesson, index) => {
+                lesson.order = index;
+            });
+            console.log("Lessons in selected unit (re-ordered):", lessonsInSelectedUnit.map(l => ({id: l.id, date: l.date, order: l.order})));
+
+
+            // Combine lessons from the selected unit with lessons from other units
+            lessons = allLessonsCopy.filter(l => l.unitId !== selectedUnit.id).concat(lessonsInSelectedUnit);
+            console.log("Final lessons array length:", lessons.length);
+
             saveState();
             renderApp();
             showAppMessage('Lesson reordered successfully!', 'success');
@@ -382,6 +473,8 @@
                 formElement = createLessonForm(type, data);
             } else if (type === 'confirmDeleteUnit') {
                 formElement = createConfirmDeleteUnitModal(data);
+            } else if (type === 'tabSettings') { // New: Tab Settings Modal
+                formElement = createTabSettingsForm();
             }
             modalContent.appendChild(formElement);
         };
@@ -477,7 +570,7 @@
                 e.preventDefault();
                 const data = {
                     title: form.querySelector('#lessonTitle').value.trim(),
-                    date: form.querySelector('#lessonDate').value, // YYYY-MM-DD string
+                    date: form.querySelector('#lessonDate').value, // ISO-formatted date string
                     googleSlidesLink: form.querySelector('#googleSlidesLink').value,
                     activityAssignment: form.querySelector('#activityAssignment').value,
                     isGraded: form.querySelector('#isGraded').checked,
@@ -519,71 +612,180 @@
             return div;
         };
 
+        // --- Tab Settings Modal ---
+        const createTabSettingsForm = () => {
+            const theme = themes[currentTheme];
+            const form = document.createElement('form');
+            form.className = 'space-y-4';
+            form.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">Manage Custom Tabs</h2>
+                <div id="tabInputs" class="space-y-3"></div>
+                <div class="flex justify-between space-x-2 mt-6">
+                    <button type="button" id="clearAllTabs" class="px-4 py-2 rounded-xl border border-red-300 text-red-700 hover:bg-red-100 transition duration-200 ease-in-out">Clear All Tabs</button>
+                    <div class="flex space-x-2">
+                        <button type="button" id="cancelTabSettings" class="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition duration-200 ease-in-out">Cancel</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}">Save Tabs</button>
+                    </div>
+                </div>
+            `;
+
+            const tabInputsContainer = form.querySelector('#tabInputs');
+            for (let i = 0; i < 5; i++) {
+                const tab = userTabs[i] || { label: '', url: '' };
+                const tabGroup = document.createElement('div');
+                tabGroup.className = 'tab-group flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2'; // Added 'tab-group' class
+                tabGroup.innerHTML = `
+                    <input type="text" placeholder="Tab Label ${i + 1}" value="${escapeHtml(tab.label)}" class="tab-label w-full sm:w-1/3 p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                    <input type="url" placeholder="Tab URL ${i + 1}" value="${escapeHtml(tab.url)}" class="tab-url w-full sm:w-2/3 p-2 rounded ${theme.inputBorder} ${theme.secondaryBg} ${theme.textColor}" />
+                `;
+                tabInputsContainer.appendChild(tabGroup);
+            }
+
+            form.querySelector('#cancelTabSettings').addEventListener('click', closeModal);
+            form.querySelector('#clearAllTabs').addEventListener('click', () => {
+                userTabs = [];
+                saveState();
+                closeModal();
+                showAppMessage('All custom tabs cleared!', 'success');
+            });
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newTabs = [];
+                form.querySelectorAll('.tab-group').forEach((group) => { // Select by class now
+                    const label = group.querySelector('.tab-label').value.trim();
+                    const url = group.querySelector('.tab-url').value.trim();
+                    if (label && url) {
+                        newTabs.push({ label, url });
+                    }
+                });
+                userTabs = newTabs;
+                saveState();
+                closeModal();
+                showAppMessage('Custom tabs saved!', 'success');
+            });
+            return form;
+        };
+
+
         // --- Drag and Drop Logic ---
         let draggedElement = null; // Stores the HTML element being dragged
-        let dragSourceDateString = null; // Stores the date string of the original droppable area
-
+        
         const handleDragStart = (e) => {
             draggedElement = e.target.closest('.draggable-lesson');
-            if (!draggedElement) return;
+            if (!draggedElement) {
+                console.warn("DragStart: Event target or its ancestor is not a .draggable-lesson.", e.target);
+                return;
+            }
+            
+            const droppableId = draggedElement.dataset.droppableId; // Get droppableId directly from the lesson element
+            if (!droppableId) {
+                console.error("DragStart Error: Draggable lesson found, but missing data-droppable-id attribute. Drag operation aborted.");
+                console.error("Dragged Element:", draggedElement);
+                e.preventDefault(); // Prevent the drag operation
+                draggedElement.classList.remove('dragging'); // Remove dragging class
+                draggedElement = null;
+                return;
+            }
 
-            draggedElement.classList.add('dragging');
             e.dataTransfer.setData('lessonId', draggedElement.dataset.lessonId);
-            dragSourceDateString = draggedElement.closest('.droppable-date').dataset.droppableId;
-            e.dataTransfer.setData('sourceDate', dragSourceDateString);
+            e.dataTransfer.setData('sourceDroppableId', droppableId); // Store the source droppable ID (YYYY-MM-DD)
             e.dataTransfer.effectAllowed = 'move';
+            draggedElement.classList.add('dragging'); // Add dragging class after data is set
+            console.log(`DragStart: Lesson ID: ${draggedElement.dataset.lessonId}, Source Droppable ID: ${droppableId}`);
         };
 
         const handleDragOver = (e) => {
             e.preventDefault(); // Necessary to allow dropping
             e.dataTransfer.dropEffect = 'move';
-            const target = e.target.closest('.droppable-date');
-            if (target) {
-                // Optional: add visual feedback for drag over
-                // target.classList.add('border-indigo-500');
+            const targetDroppable = e.target.closest('.droppable-date');
+            if (targetDroppable) {
+                targetDroppable.classList.add('highlight-drop'); // Add highlight
             }
         };
 
         const handleDragLeave = (e) => {
-            const target = e.target.closest('.droppable-date');
-            if (target) {
-                // target.classList.remove('border-indigo-500');
+            const targetDroppable = e.target.closest('.droppable-date');
+            if (targetDroppable) {
+                targetDroppable.classList.remove('highlight-drop'); // Remove highlight
             }
         };
 
         const handleDrop = (e) => {
             e.preventDefault();
             const destinationDroppable = e.target.closest('.droppable-date');
-            if (!destinationDroppable) return;
+            if (!destinationDroppable) {
+                console.warn("Drop: No droppable-date found at drop target.");
+                return;
+            }
 
             const lessonId = e.dataTransfer.getData('lessonId');
-            const sourceDate = e.dataTransfer.getData('sourceDate');
-            const destinationDateString = destinationDroppable.dataset.droppableId;
-            const destinationDate = new Date(destinationDateString + 'T00:00:00'); // Convert to Date object
+            const sourceDroppableId = e.dataTransfer.getData('sourceDroppableId');
+            const destinationDroppableId = destinationDroppable.dataset.droppableId; // This is now
+            const destinationDate = new Date(destinationDroppableId + 'T00:00:00'); // Convert to Date object reliably
 
-            const currentLessonsOnDest = lessons.filter(l => isSameDay(l.date, destinationDateString) && l.unitId === selectedUnit.id);
+            console.log(`Drop: Lesson ID: ${lessonId}, Source Date: ${sourceDroppableId}, Destination Date: ${destinationDroppableId}`);
 
-            // Determine the drop index within the destination list
-            const dropTarget = e.target.closest('.draggable-lesson');
-            let newOrder = currentLessonsOnDest.length; // Default to end
-            if (dropTarget) {
-                const dropTargetId = dropTarget.dataset.lessonId;
-                const indexInDest = currentLessonsOnDest.findIndex(l => l.id === dropTargetId);
-                if (indexInDest !== -1) {
-                    newOrder = indexInDest;
+            // --- IMPORTANT: Validate if drop is within the unit's date range ---
+            if (selectedUnit && selectedUnit.startDate && selectedUnit.endDate) {
+                const unitStartDate = new Date(selectedUnit.startDate + 'T00:00:00');
+                const unitEndDate = new Date(selectedUnit.endDate + 'T00:00:00');
+
+                // Check if destinationDate is within the unit's start and end dates (inclusive)
+                if (destinationDate < unitStartDate || destinationDate > unitEndDate) {
+                    showAppMessage('Cannot move lesson outside of unit date range.', 'error');
+                    console.warn(`Drop aborted: Destination date ${destinationDroppableId} is outside unit range ${selectedUnit.startDate} - ${selectedUnit.endDate}`);
+                    // Clean up drag visual feedback
+                    if (draggedElement) {
+                        draggedElement.classList.remove('dragging');
+                    }
+                    destinationDroppable.classList.remove('highlight-drop');
+                    draggedElement = null;
+                    return; // Abort the drop operation
                 }
             }
 
-            // Perform the reorder/move
+
+            // Determine the drop index within the destination list
+            // Find all lessons currently on the destination date (excluding the one being dragged if it's dropping on its original date)
+            const lessonsOnDestinationDateElements = Array.from(destinationDroppable.querySelectorAll('.draggable-lesson:not(.dragging)'));
+            
+            let newOrder = lessonsOnDestinationDateElements.length; // Default to end if no specific target
+            
+            // Find the element closest to the drop point for precise insertion
+            const droppedY = e.clientY;
+            let closestElement = null;
+            let minDistance = Infinity;
+
+            for (const el of lessonsOnDestinationDateElements) {
+                const rect = el.getBoundingClientRect();
+                // Calculate distance to the center of the element
+                const distance = Math.abs(droppedY - (rect.top + rect.height / 2));
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestElement = el;
+                }
+            }
+
+            if (closestElement) {
+                const closestElementIndex = lessonsOnDestinationDateElements.indexOf(closestElement);
+                const rect = closestElement.getBoundingClientRect();
+                // If dropped below the midpoint of the closest element, insert after it
+                if (droppedY > rect.top + rect.height / 2) {
+                    newOrder = closestElementIndex + 1; 
+                } else {
+                    newOrder = closestElementIndex; // Otherwise, insert before it
+                }
+            }
+            console.log(`Drop calculated newOrder: ${newOrder}`);
+
             reorderLesson(lessonId, destinationDate, newOrder);
             
-            // Clean up drag visual feedback
             if (draggedElement) {
                 draggedElement.classList.remove('dragging');
             }
-            // destinationDroppable.classList.remove('border-indigo-500');
+            // Remove highlight from destination droppable
+            destinationDroppable.classList.remove('highlight-drop');
             draggedElement = null;
-            dragSourceDateString = null;
         };
 
         const handleDragEnd = (e) => {
@@ -591,11 +793,11 @@
                 draggedElement.classList.remove('dragging');
             }
             draggedElement = null;
-            dragSourceDateString = null;
-            // Any hovered droppable areas should also reset their styles
+            // Ensure all droppable areas reset their highlight
             document.querySelectorAll('.droppable-date').forEach(el => {
-                // el.classList.remove('border-indigo-500');
+                el.classList.remove('highlight-drop');
             });
+            console.log("DragEnd: Cleaning up.");
         };
 
 
@@ -608,7 +810,35 @@
             const theme = themes[currentTheme];
             appRoot.className = `min-h-screen font-inter flex flex-col ${theme.primaryBg} ${theme.textColor}`;
 
-            // Header
+            // --- Top Tabs Section ---
+            const tabsContainer = document.createElement('div');
+            tabsContainer.className = `flex border-b ${theme.borderColor} px-4 pt-2`;
+            appRoot.appendChild(tabsContainer);
+
+            // Lesson Planner Tab (always present)
+            const lessonPlannerTab = document.createElement('div');
+            lessonPlannerTab.className = `tab-item px-4 py-2 rounded-t-lg border-t border-x ${theme.borderColor} ${theme.secondaryBg} ${currentView === 'listView' || currentView === 'monthlyView' || currentView === 'weeklyView' ? 'active' : ''}`;
+            lessonPlannerTab.textContent = 'Lesson Planner';
+            lessonPlannerTab.addEventListener('click', () => {
+                currentView = 'listView'; // Default to list view when returning to planner
+                renderApp();
+            });
+            tabsContainer.appendChild(lessonPlannerTab);
+
+            // Custom Tabs
+            userTabs.forEach((tab, index) => {
+                if (tab.label && tab.url) {
+                    const customTab = document.createElement('div');
+                    customTab.className = `tab-item px-4 py-2 rounded-t-lg border-t border-x ${theme.borderColor} ${theme.secondaryBg}`;
+                    customTab.textContent = tab.label;
+                    customTab.addEventListener('click', () => {
+                        window.open(tab.url, '_blank'); // Open in new browser tab
+                    });
+                    tabsContainer.appendChild(customTab);
+                }
+            });
+
+            // Header (now below tabs)
             const headerElement = document.createElement('header');
             headerElement.className = `p-4 shadow-md ${theme.secondaryBg} rounded-b-xl`;
             headerElement.innerHTML = `
@@ -631,7 +861,7 @@
                 <h3 class="font-bold mb-2">Views</h3>
                 <ul class="space-y-1 mb-4">
                     <li><button data-view="listView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">List View</button></li>
-                    <li><button data-view="weeklyView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Weekly View</button></li>
+                    <li><button data-view="weeklyView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Weekly View</button></li> <!-- Re-added weekly view option -->
                     <li><button data-view="monthlyView" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Monthly Calendar View</button></li>
                 </ul>
                 <h3 class="font-bold mb-2">Themes</h3>
@@ -639,10 +869,9 @@
                 <h3 class="font-bold mb-2 mt-4">Data Management</h3>
                 <ul class="space-y-1">
                     <li><button id="exportDataButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Export Data</button></li>
-                    <li>
-                        <button id="importDataButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Import Data</button>
-                        <input type="file" id="importFileInput" accept=".json" class="hidden" />
-                    </li>
+                    <li><button id="importDataButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Import Data</button></li>
+                    <li><button id="manageTabsButton" class="w-full text-left py-1 px-2 rounded ${theme.hoverBg}">Manage Custom Tabs</button></li> <!-- New tab management button -->
+                    <input type="file" id="importFileInput" accept=".json" class="hidden" />
                 </ul>
             `;
             headerElement.appendChild(menuOverlay);
@@ -650,7 +879,8 @@
             // Populate theme select
             const themeSelect = menuOverlay.querySelector('#themeSelect');
             for (const themeName in themes) {
-                if (themeName === 'liquidGlass') continue; // Skip liquidGlass
+                // Filter out liquidGlass as it was problematic
+                if (themeName === 'liquidGlass') continue; 
                 const option = document.createElement('option');
                 option.value = themeName;
                 option.textContent = themeName.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
@@ -683,6 +913,10 @@
                 menuOverlay.classList.add('hidden');
             });
             document.getElementById('importFileInput').addEventListener('change', handleImportData);
+            menuOverlay.querySelector('#manageTabsButton').addEventListener('click', () => { // New tab management listener
+                openModal('tabSettings');
+                menuOverlay.classList.add('hidden');
+            });
 
 
             // Unit Bar
@@ -692,30 +926,30 @@
                 unitDiv.className = `flex-shrink-0 px-4 py-2 rounded-xl cursor-pointer transition duration-200 ease-in-out ${selectedUnit && selectedUnit.id === unitItem.id ? theme.accentColor : `${theme.secondaryBg} ${theme.borderColor} border`} ${theme.hoverBg}`;
                 unitDiv.textContent = unitItem.name;
                 unitDiv.dataset.unitId = unitItem.id;
-                unitDiv.draggable = true;
+                unitDiv.draggable = true; // Re-enabled drag for units
 
                 unitDiv.addEventListener('click', () => {
                     selectedUnit = unitItem;
                     renderApp();
                 });
-                unitDiv.addEventListener('dragstart', (e) => {
+                unitDiv.addEventListener('dragstart', (e) => { // Re-enabled drag for units
                     e.dataTransfer.setData('unitId', unitItem.id);
                     e.dataTransfer.setData('unitIndex', index);
                     e.dataTransfer.effectAllowed = 'move';
                     unitDiv.classList.add('dragging');
                 });
-                unitDiv.addEventListener('dragover', (e) => {
+                unitDiv.addEventListener('dragover', (e) => { // Re-enabled drag for units
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                 });
-                unitDiv.addEventListener('drop', (e) => {
+                unitDiv.addEventListener('drop', (e) => { // Re-enabled drag for units
                     e.preventDefault();
                     const draggedUnitId = e.dataTransfer.getData('unitId');
                     const draggedUnitIndex = parseInt(e.dataTransfer.getData('unitIndex'), 10);
                     const droppedOnUnitId = unitItem.id;
                     const droppedOnUnitIndex = index;
 
-                    if (draggedUnitId === droppedOnUnitId) return; // Dropping on itself
+                    if (draggedUnitId === droppedOnUnitId) return;
 
                     const reorderedUnitsArray = Array.from(units);
                     const [removed] = reorderedUnitsArray.splice(draggedUnitIndex, 1);
@@ -723,7 +957,7 @@
 
                     reorderUnits(reorderedUnitsArray);
                 });
-                unitDiv.addEventListener('dragend', (e) => {
+                unitDiv.addEventListener('dragend', (e) => { // Re-enabled drag for units
                     unitDiv.classList.remove('dragging');
                 });
                 unitBar.appendChild(unitDiv);
@@ -807,9 +1041,11 @@
             const filteredLessons = lessons.filter(lesson => lesson.unitId === selectedUnit.id);
             const weekdays = selectedUnit.startDate && selectedUnit.endDate ? getWeekdaysInRange(new Date(selectedUnit.startDate + 'T00:00:00'), new Date(selectedUnit.endDate + 'T00:00:00')) : [];
 
+            // Centralized lessonsByDate creation using consistent ISO string keys
             const lessonsByDate = weekdays.reduce((acc, date) => {
-                acc[date.toDateString()] = filteredLessons
-                    .filter(lesson => isSameDay(lesson.date, date))
+                const dateISOString = date.toISOString().split('T')[0];
+                acc[dateISOString] = filteredLessons
+                    .filter(lesson => isSameDay(lesson.date, dateISOString))
                     .sort((a, b) => a.order - b.order);
                 return acc;
             }, {});
@@ -817,9 +1053,12 @@
             if (currentView === 'listView') {
                 renderListView(plannerDiv, weekdays, lessonsByDate);
             } else if (currentView === 'weeklyView') {
-                renderWeeklyView(plannerDiv, weekdays, lessonsByDate);
+                renderWeeklyView(plannerDiv, weekdays, lessonsByDate); // Pass lessonsByDate
             } else if (currentView === 'monthlyView') {
-                renderMonthlyView(plannerDiv, filteredLessons, selectedUnit.id);
+                renderMonthlyView(plannerDiv, weekdays, lessonsByDate, filteredLessons, selectedUnit.id);
+            } else { // Default to list view if currentView is unrecognized (e.g., old 'weeklyView' state)
+                currentView = 'listView';
+                renderListView(plannerDiv, weekdays, lessonsByDate);
             }
         };
 
@@ -839,11 +1078,12 @@
             listViewContainer.appendChild(listContent);
 
             weekdays.forEach(date => {
+                const dateISOString = date.toISOString().split('T')[0]; // Get ISO string for droppableId
                 const dateRow = document.createElement('div');
-                dateRow.className = `flex flex-col md:flex-row border-b last:border-b-0 py-4`;
+                dateRow.className = `flex flex-col md:flex-row border-b last:border-b-0 py-4 droppable-date`; // Added droppable-date class
                 dateRow.style.borderColor = theme.borderColor.split('-').pop();
-                dateRow.dataset.droppableId = date.toDateString(); // Make date row a droppable target
-                dateRow.addEventListener('dragover', handleDragOver);
+                dateRow.dataset.droppableId = dateISOString; // Make date row a droppable target
+                dateRow.addEventListener('dragover', handleDragOver); // Re-enabled drag-drop listeners
                 dateRow.addEventListener('dragleave', handleDragLeave);
                 dateRow.addEventListener('drop', handleDrop);
 
@@ -852,7 +1092,7 @@
                 dateColumn.style.borderColor = theme.borderColor.split('-').pop();
                 dateColumn.innerHTML = `
                     <h3 class="text-xl font-semibold mb-0 md:mb-2">${formatDate(date)}</h3>
-                    <button class="add-lesson-button w-8 h-8 flex items-center justify-center rounded-full text-lg font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>
+                    <button class="add-lesson-button w-8 h-8 flex items-center justify-center rounded-full text-lg font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${dateISOString}">+</button>
                 `;
                 dateColumn.querySelector('.add-lesson-button').addEventListener('click', (e) => {
                     openModal('addLesson', { date: e.target.dataset.date });
@@ -863,19 +1103,35 @@
                 lessonsColumn.className = `flex-grow md:pl-4`;
                 dateRow.appendChild(lessonsColumn);
 
-                renderLessonList(lessonsColumn, lessonsByDate[date.toDateString()] || [], date);
+                renderLessonList(lessonsColumn, lessonsByDate[dateISOString] || [], dateISOString, false); // Pass ISO string for droppableId
                 listContent.appendChild(dateRow);
             });
         };
 
-        const renderWeeklyView = (parentElement, weekdays, lessonsByDate) => {
+        // Weekly View (Redesigned to be a simple calendar)
+        const renderWeeklyView = (parentElement, weekdays, lessonsByDate) => { // Removed allUnitLessons as it's not directly used here
             const theme = themes[currentTheme];
             const weeklyViewContainer = document.createElement('div');
             weeklyViewContainer.className = `space-y-8`;
             parentElement.appendChild(weeklyViewContainer);
 
+            // Toggle for Student View
+            const toggleContainer = document.createElement('div');
+            toggleContainer.className = 'flex justify-end mb-4';
+            const toggleButton = document.createElement('button');
+            toggleButton.id = 'toggleWeeklyView';
+            toggleButton.className = `px-4 py-2 rounded-xl font-semibold shadow-md transition duration-300 ease-in-out transform hover:scale-105 ${theme.buttonBg}`;
+            toggleButton.textContent = isWeeklyStudentView ? 'Switch to Teacher View' : 'Switch to Student View';
+            toggleButton.addEventListener('click', () => {
+                isWeeklyStudentView = !isWeeklyStudentView;
+                renderApp(); // Re-render to apply new view
+            });
+            toggleContainer.appendChild(toggleButton);
+            weeklyViewContainer.appendChild(toggleContainer);
+
+
             if (weekdays.length === 0) {
-                weeklyViewContainer.innerHTML = `<p class="text-center text-gray-500">Please set a date range for this unit.</p>`;
+                weeklyViewContainer.innerHTML += `<p class="text-center text-gray-500">Please set a date range for this unit.</p>`;
                 return;
             }
 
@@ -892,6 +1148,8 @@
                 }
             }
 
+            let gradedAssignmentsForWeek = []; 
+
             weeks.forEach((week, weekIndex) => {
                 const weekDiv = document.createElement('div');
                 weekDiv.className = `p-4 rounded-lg shadow-md border ${theme.borderColor}`;
@@ -900,38 +1158,105 @@
                 daysGrid.className = `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-2`;
                 weekDiv.appendChild(daysGrid);
 
-                week.forEach(date => {
+                // Define the desired order of days for display (Monday to Friday)
+                const orderedWeekdays = [1, 2, 3, 4, 5]; // Monday=1, Tuesday=2, ..., Friday=5
+
+                orderedWeekdays.forEach(dayIndex => {
+                    // Find the date object for the current dayIndex within the current week
+                    const date = week.find(d => d.getDay() === dayIndex);
+                    const dateISOString = date ? date.toISOString().split('T')[0] : null;
+
                     const dayCard = document.createElement('div');
-                    dayCard.className = `p-3 rounded-lg border ${theme.borderColor} ${theme.secondaryBg} min-h-[200px] droppable-date`;
-                    dayCard.dataset.droppableId = date.toDateString(); // Make day card a droppable target
+                    dayCard.className = `p-3 rounded-lg border ${theme.borderColor} ${date ? theme.secondaryBg : 'bg-gray-100'} min-h-[200px] droppable-date`;
+                    dayCard.dataset.droppableId = dateISOString;
                     dayCard.addEventListener('dragover', handleDragOver);
                     dayCard.addEventListener('dragleave', handleDragLeave);
                     dayCard.addEventListener('drop', handleDrop);
 
-                    dayCard.innerHTML = `
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="font-semibold">${formatDate(date)}</h4>
-                            <button class="add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-sm font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>
-                        </div>
-                    `;
-                    dayCard.querySelector('.add-lesson-button').addEventListener('click', (e) => {
-                        openModal('addLesson', { date: e.target.dataset.date });
-                    });
+                    if (date) {
+                        const lessonsForDay = lessonsByDate[dateISOString] || [];
 
-                    renderLessonList(dayCard, lessonsByDate[date.toDateString()] || [], date);
+                        // Create the day header strip
+                        const dayHeaderStrip = document.createElement('div');
+                        dayHeaderStrip.className = 'day-header-strip flex justify-between items-center mb-2';
+                        
+                        const dateSpan = document.createElement('span');
+                        dateSpan.className = `font-bold ${isWeeklyStudentView ? 'text-lg' : 'text-sm'}`; // Larger date in student view
+                        dateSpan.textContent = date.getDate(); // Just the day number
+                        dayHeaderStrip.appendChild(dateSpan);
+
+                        const addButton = document.createElement('button');
+                        addButton.className = `add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
+                        addButton.textContent = '+';
+                        addButton.dataset.date = dateISOString;
+                        addButton.addEventListener('click', (e) => {
+                            openModal('addLesson', { date: e.target.dataset.date });
+                        });
+                        dayHeaderStrip.appendChild(addButton);
+                        dayCard.appendChild(dayHeaderStrip); // Append the header strip first
+
+                        // Render lesson content
+                        const lessonsContentArea = document.createElement('div');
+                        lessonsContentArea.className = 'space-y-1'; 
+                        dayCard.appendChild(lessonsContentArea);
+
+                        if (!isWeeklyStudentView) { // Teacher View
+                            renderLessonList(lessonsContentArea, lessonsForDay, dateISOString, false); // Full details
+                        } else { // Student View
+                            lessonsContentArea.innerHTML = lessonsForDay.map(lesson => `
+                                <div class="p-2 rounded-lg ${lesson.isGraded ? `${theme.gradedBg} ${theme.gradedBorder} border` : 'bg-gray-50'}">
+                                    <p class="font-bold text-base truncate">${lesson.title}</p>
+                                    ${lesson.activityAssignment ? `<p class="text-gray-700 truncate"><span class="font-bold">Assignment:</span> ${lesson.activityAssignment}</p>` : ''}
+                                    ${lesson.readings ? `<p class="text-gray-600 truncate"><span class="font-bold">Readings:</span> ${lesson.readings}</p>` : ''}
+                                </div>
+                            `).join('');
+
+                            lessonsForDay.filter(l => l.isGraded).forEach(l => {
+                                gradedAssignmentsForWeek.push({
+                                    title: l.title,
+                                    assignment: l.activityAssignment,
+                                    date: formatDate(date)
+                                });
+                            });
+                        }
+                    } else {
+                        dayCard.innerHTML = `<div class="h-full"></div>`; // Empty cell for non-weekdays or outside range
+                    }
                     daysGrid.appendChild(dayCard);
                 });
+                weekDiv.appendChild(daysGrid);
                 weeklyViewContainer.appendChild(weekDiv);
             });
+
+            if (isWeeklyStudentView) {
+                const gradedAssignmentsSummary = document.createElement('div');
+                gradedAssignmentsSummary.className = `p-4 rounded-lg shadow-md border ${theme.borderColor} mt-8`;
+                gradedAssignmentsSummary.innerHTML = `<h3 class="text-xl font-bold mb-4">Graded Assignments for the Week</h3>`;
+                
+                if (gradedAssignmentsForWeek.length > 0) {
+                    const ul = document.createElement('ul');
+                    ul.className = 'list-disc list-inside space-y-1';
+                    gradedAssignmentsForWeek.forEach(assignment => {
+                        const li = document.createElement('li');
+                        li.textContent = `${assignment.title}${assignment.assignment ? `: ${assignment.assignment}` : ''} (${assignment.date})`;
+                        ul.appendChild(li);
+                    });
+                    gradedAssignmentsSummary.appendChild(ul);
+                } else {
+                    gradedAssignmentsSummary.innerHTML += `<p class="text-gray-500 italic">No graded assignments this week.</p>`;
+                }
+                weeklyViewContainer.appendChild(gradedAssignmentsSummary);
+            }
         };
 
-        const renderMonthlyView = (parentElement, allLessons, selectedUnitId) => {
+        const renderMonthlyView = (parentElement, weekdays, lessonsByDate, allUnitLessons, selectedUnitId) => { // Added lessonsByDate to params
             const theme = themes[currentTheme];
             const monthlyViewContainer = document.createElement('div');
             monthlyViewContainer.className = `p-4 rounded-lg shadow-md border ${theme.borderColor}`;
             parentElement.appendChild(monthlyViewContainer);
 
-            let currentMonth = new Date(); // Use current date for initial month view
+            // Initialize currentMonth based on selectedUnit's start date, otherwise default to today
+            let currentMonthDate = selectedUnit && selectedUnit.startDate ? new Date(selectedUnit.startDate + 'T00:00:00') : new Date();
 
             const renderMonth = (monthDate) => {
                 monthlyViewContainer.innerHTML = ''; // Clear previous month content
@@ -981,31 +1306,44 @@
                 }
 
                 daysInCalendar.forEach((date, index) => {
+                    const dateISOString = date ? date.toISOString().split('T')[0] : null; // Get ISO string for droppableId
                     const dayCell = document.createElement('div');
-                    dayCell.className = `min-h-[180px] p-1 border ${theme.borderColor} rounded-lg flex flex-col ${date ? theme.secondaryBg : 'bg-gray-100'} ${date && (date.getDay() !== 0 && date.getDay() !== 6) ? 'droppable-date' : ''}`;
+                    dayCell.className = `min-h-[180px] p-1 border ${theme.borderColor} ${date ? theme.secondaryBg : 'bg-gray-100'} ${date && (date.getDay() !== 0 && date.getDay() !== 6) ? 'droppable-date' : ''}`;
                     
                     if (date && (date.getDay() !== 0 && date.getDay() !== 6)) { // Only droppable for weekdays
-                        dayCell.dataset.droppableId = date.toDateString();
-                        dayCell.addEventListener('dragover', handleDragOver);
+                        dayCell.dataset.droppableId = dateISOString; // Make day cell a droppable target
+                        dayCell.addEventListener('dragover', handleDragOver); // Re-enabled drag-drop listeners
                         dayCell.addEventListener('dragleave', handleDragLeave);
                         dayCell.addEventListener('drop', handleDrop);
                     }
 
                     if (date) {
-                        dayCell.innerHTML = `
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-sm">${date.getDate()}</span>
-                                ${date.getDay() !== 0 && date.getDay() !== 6 ? `<button class="add-lesson-button w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}" data-date="${date.toISOString().split('T')[0]}">+</button>` : ''}
-                            </div>
-                        `;
-                        if (date.getDay() !== 0 && date.getDay() !== 6) {
-                            dayCell.querySelector('.add-lesson-button').addEventListener('click', (e) => {
-                                openModal('addLesson', { date: e.target.dataset.date });
-                            });
-                        }
+                        const dayHeaderStrip = document.createElement('div');
+                        dayHeaderStrip.className = 'day-header-strip flex justify-between items-center mb-1';
                         
-                        const lessonsForDay = allLessons.filter(lesson => isSameDay(lesson.date, date) && lesson.unitId === selectedUnitId);
-                        renderLessonList(dayCell, lessonsForDay, date);
+                        const dateSpan = document.createElement('span');
+                        dateSpan.className = 'font-bold text-sm';
+                        dateSpan.textContent = date.getDate(); // Just the day number
+                        dayHeaderStrip.appendChild(dateSpan);
+
+                        const addButton = document.createElement('button');
+                        addButton.className = `add-lesson-button w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
+                        addButton.textContent = '+';
+                        addButton.dataset.date = dateISOString;
+                        addButton.addEventListener('click', (e) => {
+                            openModal('addLesson', { date: e.target.dataset.date });
+                        });
+                        dayHeaderStrip.appendChild(addButton);
+                        dayCell.appendChild(dayHeaderStrip); // Append the header strip first
+                        
+                        // Lessons content area
+                        const lessonsContentArea = document.createElement('div');
+                        lessonsContentArea.className = 'space-y-1'; // Placeholder for consistency
+                        dayCell.appendChild(lessonsContentArea);
+
+                        const lessonsForDay = lessonsByDate[dateISOString] || []; // Use lessonsByDate for lookup
+                        renderLessonList(lessonsContentArea, lessonsForDay, dateISOString, false); // Full details
+                        
                     } else {
                         dayCell.innerHTML = `<div class="h-full"></div>`;
                     }
@@ -1013,11 +1351,11 @@
                 });
             };
 
-            renderMonth(currentMonth);
+            renderMonth(currentMonthDate); // Pass the initial month date
         };
 
 
-        const renderLessonList = (parentElement, lessonsForDate, date) => {
+        const renderLessonList = (parentElement, lessonsForDate, droppableId, isCompact) => {
             parentElement.innerHTML = ''; // Clear existing lessons
             const theme = themes[currentTheme];
 
@@ -1037,13 +1375,14 @@
                 const lessonDiv = document.createElement('div');
                 lessonDiv.className = `p-2 rounded-lg shadow-sm cursor-grab draggable-lesson ${lesson.isGraded ? `${theme.gradedBg} ${theme.gradedBorder} border-2` : `${theme.secondaryBg} border ${theme.borderColor}`} ${theme.hoverBg}`;
                 lessonDiv.dataset.lessonId = lesson.id;
-                lessonDiv.draggable = true;
-                lessonDiv.addEventListener('dragstart', handleDragStart);
-                lessonDiv.addEventListener('dragend', handleDragEnd);
+                lessonDiv.dataset.droppableId = droppableId; // Crucial: Add droppableId to the draggable element itself
+                lessonDiv.draggable = true; // Re-enabled draggable attribute
+                lessonDiv.addEventListener('dragstart', handleDragStart); // Re-enabled drag-drop listeners
+                lessonDiv.addEventListener('dragend', handleDragEnd); // Re-enabled drag-drop listeners
 
                 lessonDiv.innerHTML = `
                     <div class="flex justify-between items-center">
-                        <span class="font-medium truncate">${lesson.title}</span>
+                        <span class="font-bold text-lg truncate">${lesson.title}</span> <!-- Larger and bolder title -->
                         <div class="flex space-x-1">
                             <button class="edit-lesson-button text-blue-500 hover:text-blue-700 text-sm" aria-label="Edit Lesson">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1058,10 +1397,10 @@
                         </div>
                     </div>
                     <div class="text-gray-600 text-sm mt-1">
-                        ${lesson.activityAssignment ? `<p class="truncate">Activity: ${lesson.activityAssignment}</p>` : ''}
-                        ${lesson.readings ? `<p class="truncate">Readings: ${lesson.readings}</p>` : ''}
-                        ${lesson.googleSlidesLink ? `<p><a href="${lesson.googleSlidesLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline truncate">Slides Link</a></p>` : ''}
-                        ${lesson.additionalLinks ? `<p class="truncate">Links: ${lesson.additionalLinks}</p>` : ''}
+                        ${lesson.activityAssignment ? `<p class="truncate"><span class="font-bold">Activity:</span> ${lesson.activityAssignment}</p>` : ''}
+                        ${lesson.readings ? `<p class="truncate"><span class="font-bold">Readings:</span> ${lesson.readings}</p>` : ''}
+                        ${lesson.googleSlidesLink ? `<p><a href="${lesson.googleSlidesLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline truncate"><span class="font-bold">Slides Link</span></a></p>` : ''}
+                        ${lesson.additionalLinks ? `<p class="truncate"><span class="font-bold">Links:</span> ${lesson.additionalLinks}</p>` : ''}
                     </div>
                 `;
                 lessonDiv.querySelector('.edit-lesson-button').addEventListener('click', () => openModal('editLesson', lesson));
