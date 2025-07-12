@@ -15,11 +15,34 @@
             -ms-overflow-style: none;  /* IE and Edge */
             scrollbar-width: none;  /* Firefox */
         }
-        /* Inter Font */
+        /* Google Fonts Imports */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+
+        /* Default Font for body (can be overridden by themes) */
         body {
             font-family: 'Inter', sans-serif;
         }
+        .font-inter { font-family: 'Inter', sans-serif; }
+        .font-lato { font-family: 'Lato', sans-serif; }
+        .font-roboto-slab { font-family: 'Roboto Slab', serif; }
+        .font-quicksand { font-family: 'Quicksand', sans-serif; }
+        .font-merriweather { font-family: 'Merriweather', serif; }
+        .font-space-mono { font-family: 'Space Mono', monospace; }
+        .font-lora { font-family: 'Lora', serif; }
+        .font-montserrat { font-family: 'Montserrat', sans-serif; }
+        .font-oswald { font-family: 'Oswald', sans-serif; }
+        .font-playfair-display { font-family: 'Playfair Display', serif; }
+
+
         /* Basic styles for draggable elements feedback */
         .dragging {
             opacity: 0.5;
@@ -111,6 +134,20 @@
             return dates;
         };
 
+        // Function to render clickable links from a comma-separated string
+        const renderClickableLinks = (linksString) => {
+            if (!linksString) return '';
+            const links = linksString.split(',').map(link => link.trim()).filter(link => link !== '');
+            return links.map(link => {
+                let validLink = link;
+                if (!link.startsWith('http://') && !link.startsWith('https://')) {
+                    validLink = 'https://' + link;
+                }
+                // Use a smaller text size and block display for better wrapping
+                return `<a href="${escapeHtml(validLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline text-xs block break-all">${escapeHtml(link)}</a>`;
+            }).join(''); // No <br> needed due to block display
+        };
+
         // --- Theme Definitions ---
         const themes = {
             default: {
@@ -124,42 +161,7 @@
                 inputBorder: 'border-gray-300 focus:border-blue-500',
                 gradedBg: 'bg-red-100',
                 gradedBorder: 'border-red-400',
-            },
-            modern: {
-                primaryBg: 'bg-gray-100',
-                secondaryBg: 'bg-white',
-                textColor: 'text-gray-900',
-                accentColor: 'bg-blue-700 text-white', /* Changed from purple */
-                borderColor: 'border-gray-300',
-                hoverBg: 'hover:bg-gray-200',
-                buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white', /* Changed from purple */
-                inputBorder: 'border-gray-400 focus:border-blue-600', /* Changed from purple */
-                gradedBg: 'bg-red-100',
-                gradedBorder: 'border-red-400',
-            },
-            monochrome: {
-                primaryBg: 'bg-gray-50',
-                secondaryBg: 'bg-white',
-                textColor: 'text-gray-800',
-                accentColor: 'bg-gray-700 text-white',
-                borderColor: 'border-gray-300',
-                hoverBg: 'hover:bg-gray-100',
-                buttonBg: 'bg-gray-600 hover:bg-gray-700 text-white',
-                inputBorder: 'border-gray-300 focus:border-gray-600',
-                gradedBg: 'bg-red-50',
-                gradedBorder: 'border-red-300',
-            },
-            watercolors: {
-                primaryBg: 'bg-gradient-to-br from-blue-50 to-green-50', /* Changed from purple/pink */
-                secondaryBg: 'bg-white bg-opacity-80 rounded-lg shadow-md',
-                textColor: 'text-gray-800',
-                accentColor: 'bg-teal-500 text-white', /* Changed from pink */
-                borderColor: 'border-blue-200',
-                hoverBg: 'hover:bg-blue-50',
-                buttonBg: 'bg-teal-400 hover:bg-teal-500 text-white', /* Changed from pink */
-                inputBorder: 'border-blue-300 focus:border-teal-400', /* Changed from pink */
-                gradedBg: 'bg-red-100 bg-opacity-80',
-                gradedBorder: 'border-red-400',
+                fontFamily: 'font-inter',
             },
             earthy: {
                 primaryBg: 'bg-amber-50',
@@ -172,18 +174,34 @@
                 inputBorder: 'border-stone-300 focus:border-green-600',
                 gradedBg: 'bg-red-100',
                 gradedBorder: 'border-red-400',
+                fontFamily: 'font-merriweather',
             },
-            earthToned: {
-                primaryBg: 'bg-orange-50', /* Lighter brownish-orange */
-                secondaryBg: 'bg-amber-100', /* Light amber/brown */
-                textColor: 'text-stone-800',
-                accentColor: 'bg-orange-800 text-white', /* Darker brownish-orange */
-                borderColor: 'border-orange-300',
-                hoverBg: 'hover:bg-orange-200',
-                buttonBg: 'bg-orange-700 hover:bg-orange-800 text-white', /* Darker button */
-                inputBorder: 'border-orange-400 focus:border-orange-600',
-                gradedBg: 'bg-red-200', /* Slightly more subdued red for graded */
-                gradedBorder: 'border-red-500',
+            maine: {
+                primaryBg: 'bg-blue-100', /* Lighter, breezier blue */
+                secondaryBg: 'bg-white',
+                textColor: 'text-gray-800',
+                accentColor: 'bg-green-700 text-white', /* Deep forest green */
+                borderColor: 'border-blue-300',
+                hoverBg: 'hover:bg-blue-200',
+                buttonBg: 'bg-green-600 hover:bg-green-700 text-white',
+                inputBorder: 'border-gray-300 focus:border-green-500',
+                gradedBg: 'bg-teal-100', /* Soft teal for graded */
+                gradedBorder: 'border-teal-400',
+                fontFamily: 'font-montserrat',
+            },
+            // New Theme: MobileClean (iOS/Android inspired)
+            mobileClean: {
+                primaryBg: 'bg-gray-50', /* Very light gray */
+                secondaryBg: 'bg-white', /* Pure white cards */
+                textColor: 'text-gray-700', /* Soft dark gray for text */
+                accentColor: 'bg-blue-600 text-white', /* Vibrant blue accent */
+                borderColor: 'border-gray-200', /* Subtle light gray borders */
+                hoverBg: 'hover:bg-gray-100',
+                buttonBg: 'bg-blue-500 hover:bg-blue-600 text-white',
+                inputBorder: 'border-gray-300 focus:border-blue-500',
+                gradedBg: 'bg-blue-50', /* Very light blue for graded */
+                gradedBorder: 'border-blue-300',
+                fontFamily: 'font-lato', /* Clean sans-serif */
             },
         };
 
@@ -308,6 +326,15 @@
                             if (lesson.unitId === unitId) {
                                 const lessonDateObj = new Date(lesson.date + 'T00:00:00');
                                 lessonDateObj.setDate(lessonDateObj.getDate() + dayDiff);
+                                
+                                // Adjust if new date falls on a weekend
+                                let newDayOfWeek = lessonDateObj.getDay();
+                                if (newDayOfWeek === 0) { // Sunday
+                                    lessonDateObj.setDate(lessonDateObj.getDate() + 1); // Move to Monday
+                                } else if (newDayOfWeek === 6) { // Saturday
+                                    lessonDateObj.setDate(lessonDateObj.getDate() + 2); // Move to Monday
+                                }
+
                                 return {
                                     ...lesson,
                                     date: lessonDateObj.toISOString().split('T')[0],
@@ -808,7 +835,7 @@
             appRoot.innerHTML = ''; // Clear previous content
 
             const theme = themes[currentTheme];
-            appRoot.className = `min-h-screen font-inter flex flex-col ${theme.primaryBg} ${theme.textColor}`;
+            appRoot.className = `min-h-screen ${theme.primaryBg} ${theme.textColor} ${theme.fontFamily} flex flex-col`; // Apply font family here
 
             // --- Top Tabs Section ---
             const tabsContainer = document.createElement('div');
@@ -1176,14 +1203,17 @@
                         dateSpan.textContent = date.getDate(); // Just the day number
                         dayHeaderStrip.appendChild(dateSpan);
 
-                        const addButton = document.createElement('button');
-                        addButton.className = `add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
-                        addButton.textContent = '+';
-                        addButton.dataset.date = dateISOString;
-                        addButton.addEventListener('click', (e) => {
-                            openModal('addLesson', { date: e.target.dataset.date });
-                        });
-                        dayHeaderStrip.appendChild(addButton);
+                        // Only add the plus button if it's the teacher view
+                        if (!isWeeklyStudentView) {
+                            const addButton = document.createElement('button');
+                            addButton.className = `add-lesson-button w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition duration-200 ease-in-out transform hover:scale-110 ${theme.buttonBg}`;
+                            addButton.textContent = '+';
+                            addButton.dataset.date = dateISOString;
+                            addButton.addEventListener('click', (e) => {
+                                openModal('addLesson', { date: e.target.dataset.date });
+                            });
+                            dayHeaderStrip.appendChild(addButton);
+                        }
                         dayCard.appendChild(dayHeaderStrip); // Append the header strip first
 
                         // Render lesson content
@@ -1197,7 +1227,7 @@
                             lessonsContentArea.innerHTML = lessonsForDay.map(lesson => `
                                 <div class="p-2 rounded-lg ${lesson.isGraded ? `${theme.gradedBg} ${theme.gradedBorder} border` : 'bg-gray-50'}">
                                     <p class="font-bold text-base truncate">${escapeHtml(lesson.title)}</p>
-                                    ${lesson.activityAssignment ? `<p class="text-gray-700 truncate"><span class="font-bold">Assignment:</span> ${escapeHtml(lesson.activityAssignment)}</p>` : ''}
+                                    ${lesson.isGraded && lesson.activityAssignment ? `<p class="text-gray-700 truncate"><span class="font-bold">Assignment:</span> ${escapeHtml(lesson.activityAssignment)}</p>` : ''}
                                     ${lesson.readings ? `<p class="text-gray-600 truncate"><span class="font-bold">Readings:</span> ${escapeHtml(lesson.readings)}</p>` : ''}
                                 </div>
                             `).join('');
@@ -1391,7 +1421,7 @@
                         ${lesson.activityAssignment ? `<p class="truncate"><span class="font-bold">Activity:</span> ${escapeHtml(lesson.activityAssignment)}</p>` : ''}
                         ${lesson.readings ? `<p class="truncate"><span class="font-bold">Readings:</span> ${escapeHtml(lesson.readings)}</p>` : ''}
                         ${lesson.googleSlidesLink ? `<p><a href="${escapeHtml(lesson.googleSlidesLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline truncate"><span class="font-bold">Slides Link</span></a></p>` : ''}
-                        ${lesson.additionalLinks ? `<p class="truncate"><span class="font-bold">Links:</span> ${escapeHtml(lesson.additionalLinks)}</p>` : ''}
+                        ${lesson.additionalLinks ? `<p class="truncate"><span class="font-bold">Links:</span> ${renderClickableLinks(lesson.additionalLinks)}</p>` : ''}
                     </div>
                 `;
                 lessonDiv.querySelector('.edit-lesson-button').addEventListener('click', () => openModal('editLesson', lesson));
